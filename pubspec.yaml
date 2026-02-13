@@ -1,0 +1,35 @@
+name: monkread
+description: A local-first PDF Reader app with Clean Architecture.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  flutter_riverpod: ^2.4.9
+  go_router: ^13.1.0
+  file_picker: ^6.1.1
+  pdfrx: ^2.2.3
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.2
+  flutter_colorpicker: ^1.1.0
+  dio: ^5.4.0
+  google_sign_in: ^6.2.1
+  pdf: ^3.10.8
+  printing: ^5.12.0
+  path: ^1.8.3
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets: []
