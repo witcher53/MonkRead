@@ -10,9 +10,13 @@ import 'package:monkread/presentation/providers/drawing_provider.dart';
 import 'package:monkread/presentation/providers/library_provider.dart';
 import 'package:monkread/presentation/providers/sidecar_provider.dart';
 import 'package:monkread/presentation/providers/split_view_provider.dart';
+import 'package:monkread/presentation/providers/toolbar_visibility_provider.dart';
+import 'package:monkread/presentation/providers/search_provider.dart';
 import 'package:monkread/presentation/widgets/ai_sidebar.dart';
 import 'package:monkread/presentation/widgets/drawing_canvas.dart';
 import 'package:monkread/presentation/widgets/drawing_toolbar.dart';
+import 'package:monkread/presentation/widgets/search_sidebar.dart';
+import 'package:monkread/presentation/widgets/search_highlight_painter.dart';
 import 'package:monkread/presentation/widgets/sidecar_canvas.dart';
 import 'package:monkread/presentation/widgets/split_handle.dart';
 import 'package:monkread/presentation/widgets/text_input_dialog.dart';
@@ -33,6 +37,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   int _totalPages = 0;
   bool _isReady = false;
   bool _showAiSidebar = false;
+  bool _showSearchSidebar = false;
   Timer? _debounceTimer;
   final PdfViewerController _pdfController = PdfViewerController();
 
@@ -70,6 +75,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final isAnnotating = drawingState.isAnnotating;
     final splitState = ref.watch(splitViewProvider);
     final isSplit = splitState.mode != SplitViewMode.none;
+    final toolbarVisible = ref.watch(toolbarVisibilityProvider);
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -150,6 +156,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ),
                 ),
               ),
+            // ── Search button ─────────────────────────────
+            IconButton(
+              icon: Icon(
+                Icons.search_rounded,
+                color: _showSearchSidebar
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+              ),
+              tooltip: 'Search in Document',
+              onPressed: () {
+                setState(() {
+                  _showSearchSidebar = !_showSearchSidebar;
+                  if (!_showSearchSidebar) {
+                    ref.read(searchProvider.notifier).clear();
+                  }
+                });
+              },
+            ),
             // ── AI button ─────────────────────────────
             IconButton(
               icon: Icon(
@@ -213,6 +237,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               selectedStrokeWidth: drawingState.selectedStrokeWidth,
               pdfController: _pdfController,
               splitViewMode: splitState.mode,
+              isVisible: toolbarVisible,
+              onToggleVisibility: () =>
+                  ref.read(toolbarVisibilityProvider.notifier).toggle(),
               onTogglePen: () =>
                   ref.read(drawingProvider.notifier).togglePenMode(),
               onToggleText: () =>
@@ -241,6 +268,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ref.read(drawingProvider.notifier).clearCurrentPage(),
             ),
 
+            // ── Show Toolbar FAB (when hidden) ──────────
+            if (!toolbarVisible)
+              Positioned(
+                right: 12,
+                bottom: 24,
+                child: FloatingActionButton.small(
+                  heroTag: 'show_toolbar_fab',
+                  onPressed: () =>
+                      ref.read(toolbarVisibilityProvider.notifier).show(),
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onPrimaryContainer,
+                  child: const Icon(Icons.chevron_left_rounded),
+                ),
+              ),
+
             // ── AI Sidebar ─────────────────────────────
             if (_showAiSidebar)
               Positioned(
@@ -250,6 +294,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 child: AiSidebar(
                   onExtractPageText: _extractCurrentPageText,
                   onClose: () => setState(() => _showAiSidebar = false),
+                ),
+              ),
+
+            // ── Search Sidebar ─────────────────────────────
+            if (_showSearchSidebar)
+              Positioned(
+                top: 0,
+                right: 0,
+                bottom: 0,
+                child: SearchSidebar(
+                  filePath: widget.document.filePath,
+                  pdfController: _pdfController,
+                  onClose: () {
+                    setState(() => _showSearchSidebar = false);
+                    ref.read(searchProvider.notifier).clear();
+                  },
                 ),
               ),
           ],
@@ -332,7 +392,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final textAnnotations =
         drawingState.textAnnotationsForPage(pageIndex);
 
+    // Search highlights for this page
+    final searchState = ref.watch(searchProvider);
+    final searchMatches = searchState.results
+        .where((r) => r.pageIndex == pageIndex)
+        .toList();
+
     return [
+      // Search highlight layer (below drawing canvas)
+      if (searchMatches.isNotEmpty)
+        for (final match in searchMatches)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: SearchHighlightPainter(
+                matchBounds: match.bounds,
+                isCurrentMatch: searchState.currentResult == match,
+              ),
+            ),
+          ),
+      // Drawing canvas layer
       Positioned.fill(
         child: DrawingCanvas(
           annotationMode: mode,

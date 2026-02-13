@@ -27,6 +27,9 @@ class DrawingToolbar extends StatefulWidget {
   // New callbacks for deletion
   final VoidCallback? onDeleteSelection;
   final VoidCallback? onClearPage;
+  // Visibility toggle
+  final bool isVisible;
+  final VoidCallback? onToggleVisibility;
 
   const DrawingToolbar({
     super.key,
@@ -47,6 +50,8 @@ class DrawingToolbar extends StatefulWidget {
     required this.onToggleSidecar,
     this.onDeleteSelection,
     this.onClearPage,
+    this.isVisible = true,
+    this.onToggleVisibility,
   });
 
   @override
@@ -96,8 +101,10 @@ class _DrawingToolbarState extends State<DrawingToolbar>
     final isLasso = widget.annotationMode == AnnotationMode.lasso;
     final isAnnotating = widget.annotationMode != AnnotationMode.none;
 
-    return Positioned(
-      right: 12,
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
+      right: widget.isVisible ? 12 : -80,
       bottom: 24,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -277,27 +284,48 @@ class _DrawingToolbarState extends State<DrawingToolbar>
           ),
 
           // ── Main Tools FAB ────────────────────────
-          FloatingActionButton(
-            heroTag: 'tools_fab',
-            onPressed: _toggle,
-            backgroundColor: _expanded
-                ? theme.colorScheme.primaryContainer
-                : isAnnotating
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.surface,
-            foregroundColor: _expanded
-                ? theme.colorScheme.onPrimaryContainer
-                : isAnnotating
-                    ? Colors.white
-                    : theme.colorScheme.onSurface,
-            elevation: _expanded ? 8 : 3,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                _expanded ? Icons.close_rounded : Icons.construction_rounded,
-                key: ValueKey(_expanded),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Hide button (only when expanded)
+              if (_expanded && widget.onToggleVisibility != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FloatingActionButton.small(
+                    heroTag: 'hide_toolbar_fab',
+                    onPressed: () {
+                      if (_expanded) _toggle();
+                      widget.onToggleVisibility!();
+                    },
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                    foregroundColor: theme.colorScheme.onSurface,
+                    elevation: 2,
+                    child: const Icon(Icons.chevron_right_rounded, size: 20),
+                  ),
+                ),
+              FloatingActionButton(
+                heroTag: 'tools_fab',
+                onPressed: _toggle,
+                backgroundColor: _expanded
+                    ? theme.colorScheme.primaryContainer
+                    : isAnnotating
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surface,
+                foregroundColor: _expanded
+                    ? theme.colorScheme.onPrimaryContainer
+                    : isAnnotating
+                        ? Colors.white
+                        : theme.colorScheme.onSurface,
+                elevation: _expanded ? 8 : 3,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    _expanded ? Icons.close_rounded : Icons.construction_rounded,
+                    key: ValueKey(_expanded),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
