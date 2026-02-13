@@ -20,6 +20,10 @@ import 'package:monkread/presentation/widgets/search_highlight_painter.dart';
 import 'package:monkread/presentation/widgets/sidecar_canvas.dart';
 import 'package:monkread/presentation/widgets/split_handle.dart';
 import 'package:monkread/presentation/widgets/text_input_dialog.dart';
+import 'package:monkread/presentation/widgets/navigation_sidebar.dart';
+import 'package:monkread/presentation/providers/bookmark_provider.dart';
+import 'package:printing/printing.dart';
+import 'dart:io';
 
 /// Renders a PDF with per-page drawing/text overlays, optional dual PDF
 /// view, and sidecar infinite whiteboard.
@@ -38,6 +42,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _isReady = false;
   bool _showAiSidebar = false;
   bool _showSearchSidebar = false;
+  bool _showNavigationSidebar = false;
   Timer? _debounceTimer;
   final PdfViewerController _pdfController = PdfViewerController();
 
@@ -59,6 +64,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           .read(sidecarProvider.notifier)
           .loadForFile(widget.document.filePath);
     });
+  }
+
+  /// Safely retrieves the document or returns null if controller is detached.
+  PdfDocument? get _safeDocument {
+    try {
+      // This getter throws if controller._state is null in pdfrx
+      return _pdfController.document;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -91,7 +106,40 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             widget.document.fileName,
             overflow: TextOverflow.ellipsis,
           ),
+          leadingWidth: 100,
+          leading: Row(
+            children: [
+              const BackButton(),
+              IconButton(
+                icon: const Icon(Icons.grid_view_rounded),
+                onPressed: () => setState(() => _showNavigationSidebar = !_showNavigationSidebar),
+                tooltip: 'Navigation',
+              ),
+            ],
+          ),
           actions: [
+            // Bookmark toggle
+            Consumer(
+              builder: (context, ref, child) {
+                final bookmarks = ref.watch(bookmarkProvider(widget.document.filePath));
+                final isBookmarked = bookmarks.any((b) => b.pageIndex == _currentPage);
+                return IconButton(
+                  icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_border),
+                  color: isBookmarked ? Colors.amber : null,
+                  onPressed: () {
+                    ref.read(bookmarkProvider(widget.document.filePath).notifier).toggleBookmark(_currentPage);
+                  },
+                  tooltip: 'Toggle Bookmark',
+                );
+              },
+            ),
+            // Print
+            IconButton(
+              icon: const Icon(Icons.print),
+              onPressed: _printPdf,
+              tooltip: 'Print',
+            ),
+
             // ── Mode indicator ───────────────────────
             if (isAnnotating)
               Center(
@@ -285,33 +333,128 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ),
               ),
 
-            // ── AI Sidebar ─────────────────────────────
-            if (_showAiSidebar)
-              Positioned(
-                top: 0,
-                right: 0,
-                bottom: 0,
-                child: AiSidebar(
-                  onExtractPageText: _extractCurrentPageText,
-                  onClose: () => setState(() => _showAiSidebar = false),
-                ),
-              ),
+            // ── Sidebars (Only show when ready AND document is available) ────────────────
+            if (_isReady && _safeDocument != null) ...[
+              
+              // Helper for mobile scrim
+              if (MediaQuery.of(context).size.width < 600) ...[
+                // Mobile: Scrim + Overlay
+                if (_showNavigationSidebar)
+                  Positioned.fill(
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() => _showNavigationSidebar = false),
+                          child: Container(color: Colors.black54),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: SizedBox(
+                            width: MediaQuery.of(context).size.width * 0.85,
+                            child: NavigationSidebar(
+                              controller: _pdfController,
+                              document: _safeDocument!,
+                              filePath: widget.document.filePath,
+                              onClose: () => setState(() => _showNavigationSidebar = false),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-            // ── Search Sidebar ─────────────────────────────
-            if (_showSearchSidebar)
-              Positioned(
-                top: 0,
-                right: 0,
-                bottom: 0,
-                child: SearchSidebar(
-                  filePath: widget.document.filePath,
-                  pdfController: _pdfController,
-                  onClose: () {
-                    setState(() => _showSearchSidebar = false);
-                    ref.read(searchProvider.notifier).clear();
-                  },
-                ),
-              ),
+                if (_showAiSidebar)
+                  Positioned.fill(
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() => _showAiSidebar = false),
+                          child: Container(color: Colors.black54),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: SizedBox(
+                            width: MediaQuery.of(context).size.width * 0.85,
+                            child: AiSidebar(
+                              onExtractPageText: _extractCurrentPageText,
+                              onClose: () => setState(() => _showAiSidebar = false),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                if (_showSearchSidebar)
+                  Positioned.fill(
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                             setState(() => _showSearchSidebar = false);
+                             ref.read(searchProvider.notifier).clear();
+                          },
+                          child: Container(color: Colors.black54),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: SizedBox(
+                            width: MediaQuery.of(context).size.width * 0.85,
+                            child: SearchSidebar(
+                              filePath: widget.document.filePath,
+                              pdfController: _pdfController,
+                              onClose: () {
+                                setState(() => _showSearchSidebar = false);
+                                ref.read(searchProvider.notifier).clear();
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ] else ...[
+                // Desktop: Standard Sidebars (Push content or overlay)
+                if (_showAiSidebar)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: AiSidebar(
+                      onExtractPageText: _extractCurrentPageText,
+                      onClose: () => setState(() => _showAiSidebar = false),
+                    ),
+                  ),
+
+                if (_showNavigationSidebar)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    child: NavigationSidebar(
+                      controller: _pdfController,
+                      document: _safeDocument!,
+                      filePath: widget.document.filePath,
+                      onClose: () => setState(() => _showNavigationSidebar = false),
+                    ),
+                  ),
+
+                if (_showSearchSidebar)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SearchSidebar(
+                      filePath: widget.document.filePath,
+                      pdfController: _pdfController,
+                      onClose: () {
+                        setState(() => _showSearchSidebar = false);
+                        ref.read(searchProvider.notifier).clear();
+                      },
+                    ),
+                  ),
+              ],
+            ],
           ],
         ),
       ),
@@ -334,6 +477,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       debugPrint('Text extraction error: $e');
     }
     return 'Could not extract text from this page. The page may be scanned/image-based.';
+  }
+
+  Future<void> _printPdf() async {
+    try {
+      final file = File(widget.document.filePath);
+      final bytes = await file.readAsBytes();
+      await Printing.layoutPdf(
+        onLayout: (format) async => bytes,
+        name: widget.document.fileName,
+      );
+    } catch (e) {
+      debugPrint('Print error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to print: $e')),
+        );
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -605,6 +766,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   void _handleToggleDualPdf() {
+    // Close sidebars to prevent crash during rebuild/transition
+    setState(() {
+      _isReady = false; // Force UI to wait for new viewer reuse
+      _showNavigationSidebar = false;
+      _showSearchSidebar = false;
+      _showAiSidebar = false;
+    });
+
     final current = ref.read(splitViewProvider).mode;
     if (current == SplitViewMode.dualPdf) {
       ref.read(splitViewProvider.notifier).closeSplitView();

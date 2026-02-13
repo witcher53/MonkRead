@@ -4,10 +4,10 @@ import 'package:monkread/domain/entities/drawing_state.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 /// An expandable floating dock for annotation tools + zoom + split view.
-/// An expandable floating dock for annotation tools + zoom.
 ///
-/// Collapsed: single "Tools" FAB + zoom ±.
-/// Expanded: Pen, Text, Color, Stroke width, Undo — in a vertical panel.
+/// **Responsive Layout:**
+/// - **Mobile (< 600px):** Horizontal scrollable row at bottom center.
+/// - **Desktop:** Floating vertical panel + dedicated Zoom/Split islands.
 class DrawingToolbar extends StatefulWidget {
   final AnnotationMode annotationMode;
   final bool canUndo;
@@ -94,6 +94,146 @@ class _DrawingToolbarState extends State<DrawingToolbar>
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.isVisible) return const SizedBox.shrink();
+
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 600;
+
+    if (isMobile) {
+      return _buildMobileLayout(context);
+    } else {
+      return _buildDesktopLayout(context);
+    }
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    final theme = Theme.of(context);
+    final isNone = widget.annotationMode == AnnotationMode.none;
+    final isPen = widget.annotationMode == AnnotationMode.pen;
+    final isText = widget.annotationMode == AnnotationMode.text;
+    final isLasso = widget.annotationMode == AnnotationMode.lasso;
+
+    // Consolidate all tools into one horizontal list
+    return Positioned(
+      bottom: 24,
+      left: 16,
+      right: 16,
+      child: Material(
+        elevation: 8,
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Core Tools
+              _DockItem(
+                icon: Icons.pan_tool_alt_rounded,
+                label: 'Hand',
+                isActive: isNone,
+                activeColor: Colors.blueGrey,
+                onTap: widget.onHandMode,
+              ),
+              _DockItem(
+                icon: Icons.edit_rounded,
+                label: 'Pen',
+                isActive: isPen,
+                activeColor: theme.colorScheme.primary,
+                onTap: widget.onTogglePen,
+              ),
+              _DockItem(
+                icon: Icons.text_fields_rounded,
+                label: 'Text',
+                isActive: isText,
+                activeColor: theme.colorScheme.tertiary,
+                onTap: widget.onToggleText,
+              ),
+              _DockItem(
+                icon: Icons.gesture_rounded,
+                label: 'Lasso',
+                isActive: isLasso,
+                activeColor: Colors.deepOrangeAccent,
+                onTap: widget.onToggleLasso,
+              ),
+              
+              const _DockDivider(isVertical: false),
+
+              // 2. Properties (Color/Stroke) - Only if relevant
+              if (isPen || isText)
+                _DockItem(
+                  icon: Icons.palette_rounded,
+                  label: 'Color',
+                  iconColor: widget.selectedColor,
+                  onTap: () => _showColorPicker(context),
+                ),
+              if (isPen)
+                _StrokeDot(
+                  width: widget.selectedStrokeWidth,
+                  color: widget.selectedColor,
+                  onTap: () => _showStrokeWidthPicker(context),
+                ),
+              
+              if (isPen || isText) const _DockDivider(isVertical: false),
+
+               // 3. Actions (Undo, Delete, Clear)
+              if (isPen && widget.canUndo)
+                _DockItem(
+                  icon: Icons.undo_rounded,
+                  label: 'Undo',
+                  onTap: widget.onUndo,
+                ),
+               if (widget.onDeleteSelection != null)
+                _DockItem(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete',
+                  iconColor: Colors.red,
+                  onTap: widget.onDeleteSelection!,
+                ),
+               if (widget.onClearPage != null)
+                 _DockItem(
+                  icon: Icons.layers_clear_rounded,
+                  label: 'Clear',
+                  iconColor: Colors.redAccent,
+                  onTap: () => _confirmClearPage(context),
+                ),
+
+              const _DockDivider(isVertical: false),
+
+              // 4. View Controls (Zoom, Split)
+              _DockItem(
+                icon: Icons.zoom_in_rounded,
+                label: 'Zoom In',
+                onTap: () => widget.pdfController.zoomUp(),
+              ),
+              _DockItem(
+                icon: Icons.zoom_out_rounded,
+                label: 'Zoom Out',
+                onTap: () => widget.pdfController.zoomDown(),
+              ),
+              _DockItem(
+                icon: Icons.auto_stories_rounded,
+                label: 'Dual PDF',
+                isActive: widget.splitViewMode == SplitViewMode.dualPdf,
+                activeColor: const Color(0xFF6750A4),
+                onTap: widget.onToggleDualPdf,
+              ),
+               _DockItem(
+                icon: Icons.note_alt_rounded,
+                label: 'Notes',
+                isActive: widget.splitViewMode == SplitViewMode.sidecar,
+                activeColor: const Color(0xFF2E7D32),
+                onTap: widget.onToggleSidecar,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context) {
     final theme = Theme.of(context);
     final isNone = widget.annotationMode == AnnotationMode.none;
     final isPen = widget.annotationMode == AnnotationMode.pen;
@@ -483,14 +623,14 @@ class _DockItem extends StatelessWidget {
 
     return SizedBox(
       width: 48,
-      height: 44,
+      height: 48, // Increased to 48 for mobile touch target
       child: Material(
         color: isActive ? color.withValues(alpha: 0.12) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
-          child: Icon(icon, size: 21, color: color),
+          child: Icon(icon, size: 24, color: color), // Increased icon size slightly
         ),
       ),
     );
@@ -498,13 +638,16 @@ class _DockItem extends StatelessWidget {
 }
 
 class _DockDivider extends StatelessWidget {
-  const _DockDivider();
+  final bool isVertical;
+  const _DockDivider({this.isVertical = true});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: Divider(height: 1, thickness: 1, color: Colors.grey.shade300),
+      child: isVertical
+          ? Divider(height: 1, thickness: 1, color: Colors.grey.shade300)
+          : VerticalDivider(width: 1, thickness: 1, color: Colors.grey.shade300),
     );
   }
 }
@@ -524,7 +667,7 @@ class _StrokeDot extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 48,
-      height: 44,
+      height: 48,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
