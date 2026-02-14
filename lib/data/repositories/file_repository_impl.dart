@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:monkread/core/constants/app_constants.dart';
 import 'package:monkread/domain/entities/pdf_document.dart';
 import 'package:monkread/domain/repositories/file_repository.dart';
@@ -13,6 +14,9 @@ import 'package:monkread/domain/repositories/file_repository.dart';
 class FileRepositoryImpl implements FileRepository {
   @override
   Future<bool> requestStoragePermission() async {
+    // Web doesn't require storage permissions for picking files.
+    if (kIsWeb) return true;
+
     // Desktop platforms (Windows, macOS, Linux) don't use Android/iOS-style
     // runtime permissions. The native file picker handles access itself.
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {

@@ -51,12 +51,9 @@ class PdfPickNotifier extends StateNotifier<PdfPickState> {
     state = const PdfPickLoading();
 
     try {
-      // Step 1: Ensure we have storage permission
-      final hasPermission = await _repository.requestStoragePermission();
-      if (!hasPermission) {
-        state = const PdfPickError(PermissionFailure());
-        return;
-      }
+      // Step 1: Open the native file picker immediately
+      // (Permissions are handled by the plugin/OS, and we must not await anything
+      // before this call to preserve the user activation gesture on Web)
 
       // Step 2: Open the native file picker
       final document = await _repository.pickPdfFile();
