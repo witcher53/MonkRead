@@ -12,6 +12,7 @@ import 'package:monkread/presentation/providers/split_view_provider.dart';
 import 'package:monkread/presentation/widgets/ai_sidebar.dart';
 import 'package:monkread/presentation/widgets/drawing_canvas.dart';
 import 'package:monkread/presentation/widgets/drawing_toolbar.dart';
+import 'package:monkread/presentation/widgets/navigation_sidebar.dart';
 import 'package:monkread/presentation/widgets/sidecar_canvas.dart';
 import 'package:monkread/presentation/widgets/split_handle.dart';
 import 'package:monkread/presentation/widgets/text_input_dialog.dart';
@@ -32,6 +33,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   int _totalPages = 0;
   bool _isReady = false;
   bool _showAiSidebar = false;
+  bool _showSidenav = false;
   Timer? _debounceTimer;
   final PdfViewerController _pdfController = PdfViewerController();
 
@@ -80,6 +82,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.menu_open),
+            tooltip: 'Navigation',
+            onPressed: () => setState(() => _showSidenav = !_showSidenav),
+          ),
           title: Text(
             widget.document.fileName,
             overflow: TextOverflow.ellipsis,
@@ -163,88 +170,118 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             ),
           ],
         ),
-        body: Stack(
+        // Mobile Drawer
+        drawer: MediaQuery.of(context).size.width < 900
+            ? NavigationSidebar(
+                controller: _pdfController,
+                document: widget.document,
+                filePath: widget.document.filePath,
+                onClose: () => Navigator.pop(context),
+              )
+            : null,
+        body: Row(
           children: [
-            // ── Main content (single or split) ──────────
-            if (isSplit)
-              _buildSplitLayout(splitState, mode, isAnnotating)
-            else
-              _buildPrimaryPdf(mode, isAnnotating),
+            // Desktop Sidebar
+            if (_showSidenav && MediaQuery.of(context).size.width >= 900)
+              NavigationSidebar(
+                controller: _pdfController,
+                document: widget.document,
+                filePath: widget.document.filePath,
+                onClose: () => setState(() => _showSidenav = false),
+              ),
 
-            // ── Loading overlay ──────────────────────────
-            if (!_isReady)
-              Container(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                        color: Theme.of(context).colorScheme.primary,
+            // Main Content Area
+            Expanded(
+              child: Stack(
+                children: [
+                  // ── Main content (single or split) ──────────
+                  if (isSplit)
+                    _buildSplitLayout(splitState, mode, isAnnotating)
+                  else
+                    _buildPrimaryPdf(mode, isAnnotating),
+
+                  // ── Loading overlay ──────────────────────────
+                  if (!_isReady)
+                    Container(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Loading PDF…',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.6),
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Loading PDF…',
-                        style:
-                            Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withOpacity(0.6),
-                                ),
-                      ),
-                    ],
+                    ),
+
+                  // ── Toolbar ──────────────────────────────────
+                  DrawingToolbar(
+                    annotationMode: mode,
+                    canUndo: completedStrokes.isNotEmpty,
+                    selectedColor: drawingState.selectedColor,
+                    selectedStrokeWidth: drawingState.selectedStrokeWidth,
+                    pdfController: _pdfController,
+                    splitViewMode: splitState.mode,
+                    onTogglePen: () =>
+                        ref.read(drawingProvider.notifier).togglePenMode(),
+                    onToggleText: () =>
+                        ref.read(drawingProvider.notifier).toggleTextMode(),
+                    onToggleLasso: () =>
+                        ref.read(drawingProvider.notifier).toggleLassoMode(),
+                    onHandMode: () => ref
+                        .read(drawingProvider.notifier)
+                        .setAnnotationMode(AnnotationMode.none),
+                    onUndo: () => ref
+                        .read(drawingProvider.notifier)
+                        .undoLastStroke(_currentPage),
+                    onColorChanged: (color) =>
+                        ref.read(drawingProvider.notifier).setColor(color),
+                    onStrokeWidthChanged: (width) => ref
+                        .read(drawingProvider.notifier)
+                        .setStrokeWidth(width),
+                    onToggleDualPdf: _handleToggleDualPdf,
+                    onToggleSidecar: () =>
+                        ref.read(splitViewProvider.notifier).toggleSidecar(),
+                    onDeleteSelection:
+                        (drawingState.lassoSelection?.isEmpty ?? true)
+                            ? null
+                            : () => ref
+                                .read(drawingProvider.notifier)
+                                .deleteSelection(),
+                    onClearPage: () => ref
+                        .read(drawingProvider.notifier)
+                        .clearCurrentPage(),
                   ),
-                ),
-              ),
 
-            // ── Toolbar ──────────────────────────────────
-            DrawingToolbar(
-              annotationMode: mode,
-              canUndo: completedStrokes.isNotEmpty,
-              selectedColor: drawingState.selectedColor,
-              selectedStrokeWidth: drawingState.selectedStrokeWidth,
-              pdfController: _pdfController,
-              splitViewMode: splitState.mode,
-              onTogglePen: () =>
-                  ref.read(drawingProvider.notifier).togglePenMode(),
-              onToggleText: () =>
-                  ref.read(drawingProvider.notifier).toggleTextMode(),
-              onToggleLasso: () =>
-                  ref.read(drawingProvider.notifier).toggleLassoMode(),
-              onHandMode: () => ref
-                  .read(drawingProvider.notifier)
-                  .setAnnotationMode(AnnotationMode.none),
-              onUndo: () => ref
-                  .read(drawingProvider.notifier)
-                  .undoLastStroke(_currentPage),
-              onColorChanged: (color) =>
-                  ref.read(drawingProvider.notifier).setColor(color),
-              onStrokeWidthChanged: (width) =>
-                  ref.read(drawingProvider.notifier).setStrokeWidth(width),
-              onToggleDualPdf: _handleToggleDualPdf,
-              onToggleSidecar: () =>
-                  ref.read(splitViewProvider.notifier).toggleSidecar(),
-              onDeleteSelection: (drawingState.lassoSelection?.isEmpty ?? true)
-                  ? null
-                  : () => ref
-                      .read(drawingProvider.notifier)
-                      .deleteSelection(),
-              onClearPage: () =>
-                  ref.read(drawingProvider.notifier).clearCurrentPage(),
+                  // ── AI Sidebar ─────────────────────────────
+                  if (_showAiSidebar)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AiSidebar(
+                        onExtractPageText: _extractCurrentPageText,
+                        onClose: () => setState(() => _showAiSidebar = false),
+                      ),
+                    ),
+                ],
+              ),
             ),
-
-            // ── AI Sidebar ─────────────────────────────
-            if (_showAiSidebar)
-              Positioned(
-                top: 0,
-                right: 0,
-                bottom: 0,
-                child: AiSidebar(
-                  onExtractPageText: _extractCurrentPageText,
-                  onClose: () => setState(() => _showAiSidebar = false),
-                ),
-              ),
           ],
         ),
       ),

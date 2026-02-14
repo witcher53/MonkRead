@@ -321,11 +321,58 @@ class DrawingCanvas extends StatelessWidget {
           return GestureDetector(
             behavior: HitTestBehavior.translucent,
             // Explicit user request: use arrow syntax (d) => ...
+            // Explicit user request: use arrow syntax (d) => ...
             onPanStart: (isPen || isLasso)
-                ? (d) => onPanStart(_normalize(d.localPosition, size))
+                ? (d) {
+                    var pos = _normalize(d.localPosition, size);
+                    if (isLasso && isRotating && lassoSelection != null) {
+                      // MATRIX FIX: Apply inverse rotation to map pointer back to local space
+                      final bounds = lassoSelection.computeBounds(
+                          completedStrokes, textAnnotations);
+                      final center = _normalize(
+                          Offset(bounds.center.dx * size.width,
+                              bounds.center.dy * size.height),
+                          size);
+                      
+                      final dx = pos.dx - center.dx;
+                      final dy = pos.dy - center.dy;
+                      
+                      final sin = math.sin(-rotation);
+                      final cos = math.cos(-rotation);
+                      
+                      final newX = dx * cos - dy * sin;
+                      final newY = dx * sin + dy * cos;
+                      
+                      pos = Offset(center.dx + newX, center.dy + newY);
+                    }
+                    onPanStart(pos);
+                  }
                 : null,
             onPanUpdate: (isPen || isLasso)
-                ? (d) => onPanUpdate(_normalize(d.localPosition, size))
+                ? (d) {
+                    var pos = _normalize(d.localPosition, size);
+                     if (isLasso && isRotating && lassoSelection != null) {
+                      // MATRIX FIX: Apply inverse rotation to map pointer back to local space
+                      final bounds = lassoSelection.computeBounds(
+                          completedStrokes, textAnnotations);
+                      final center = _normalize(
+                          Offset(bounds.center.dx * size.width,
+                              bounds.center.dy * size.height),
+                          size);
+                      
+                      final dx = pos.dx - center.dx;
+                      final dy = pos.dy - center.dy;
+                      
+                      final sin = math.sin(-rotation);
+                      final cos = math.cos(-rotation);
+                      
+                      final newX = dx * cos - dy * sin;
+                      final newY = dx * sin + dy * cos;
+                      
+                      pos = Offset(center.dx + newX, center.dy + newY);
+                    }
+                    onPanUpdate(pos);
+                  }
                 : null,
             onPanEnd: (isPen || isLasso)
                 ? (_) => onPanEnd()
