@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:monkread/domain/entities/pdf_document.dart' as monk;
+import 'package:monkread/presentation/providers/bookmark_provider.dart';
+import 'package:monkread/data/services/pdf_export_service.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
 import 'package:monkread/presentation/providers/drawing_provider.dart';
 import 'package:monkread/presentation/providers/library_provider.dart';
@@ -91,6 +93,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             widget.document.fileName,
             overflow: TextOverflow.ellipsis,
           ),
+            ],
+          ),
           actions: [
             // ── Mode indicator ───────────────────────
             if (isAnnotating)
@@ -133,7 +137,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             if (_isReady)
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 16),
+                  padding: const EdgeInsets.only(right: 8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -156,6 +160,33 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ),
                 ),
               ),
+            
+            // ── Bookmark Button ───────────────────────
+            Consumer(
+              builder: (context, ref, _) {
+                final bookmarks = ref.watch(bookmarkProvider(widget.document.filePath));
+                final isBookmarked = bookmarks.any((b) => b.pageIndex == _currentPage);
+                return IconButton(
+                  icon: Icon(
+                    isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                    color: isBookmarked ? Theme.of(context).colorScheme.primary : null,
+                  ),
+                  tooltip: isBookmarked ? 'Remove Bookmark' : 'Add Bookmark',
+                  onPressed: () {
+                    ref.read(bookmarkProvider(widget.document.filePath).notifier)
+                       .toggleBookmark(_currentPage);
+                  },
+                );
+              },
+            ),
+
+            // ── Export Button ─────────────────────────
+            IconButton(
+              icon: const Icon(Icons.download_rounded),
+              tooltip: 'Export PDF with Annotations',
+              onPressed: _handleExport,
+            ),
+
             // ── AI button ─────────────────────────────
             IconButton(
               icon: Icon(
@@ -318,6 +349,78 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       debugPrint('Text extraction error: $e');
     }
     return 'Could not extract text from this page. The page may be scanned/image-based.';
+  }
+
+  Future<void> _handleExport() async {
+    // Basic dialog to confirm export
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Export PDF'),
+        content: const Text(
+            'This will export a copy of the PDF with all your annotations embedded.\nContinue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Export'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    if (!mounted) return;
+    
+    // Show loading snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Generating PDF with annotations...')),
+    );
+
+    try {
+      final doc = _pdfController.document;
+      if (doc == null || doc.pages.isEmpty) {
+        throw Exception('PDF document not loaded');
+      }
+
+      // Use the first page size for export (simplification)
+      // Ideally we'd handle mixed page sizes, but the service enforces one.
+      final firstPage = doc.pages.first;
+      
+      final outputPath = await PdfExportService.exportWithAnnotations(
+        sourceFilePath: widget.document.filePath,
+        drawingState: ref.read(drawingProvider),
+        totalPages: doc.pages.length,
+        pageWidthPt: firstPage.width,
+        pageHeightPt: firstPage.height,
+      );
+
+      if (outputPath != null && mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exported to: $outputPath'),
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () {
+                // TODO: Open file logic
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -500,13 +603,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (filePath == null || filePath.isEmpty) {
       return _buildPickSecondaryPrompt();
     }
-    return PdfViewer.file(
-      filePath,
-      controller: _secondaryPdfController,
-      params: PdfViewerParams(
-        maxScale: 8.0,
-        scrollByMouseWheel: 1.5,
-      ),
+    
+    // Prevent gray screen by waiting for file availability/build cycle
+    return FutureBuilder<bool>(
+      future: Future.delayed(const Duration(milliseconds: 100), () async {
+        return File(filePath).exists();
+      }),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        return PdfViewer.file(
+          filePath,
+          key: ValueKey(filePath), // Force rebuild if file changes
+          controller: _secondaryPdfController,
+          params: PdfViewerParams(
+            maxScale: 8.0,
+            scrollByMouseWheel: 1.5,
+            errorBannerBuilder: (context, error, stackTrace, documentRef) {
+              return Center(child: Text('Error loading PDF: $error'));
+            },
+          ),
+        );
+      },
     );
   }
 

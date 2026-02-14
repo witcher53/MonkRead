@@ -554,7 +554,10 @@ class DrawingNotifier extends StateNotifier<DocumentDrawingState> {
         final pWithDrag = t.position + lasso.dragOffset;
         final newPos = LassoSelection.rotatePoint(pWithDrag, center, angle);
         
-        textMap[id] = t.copyWith(position: newPos);
+        textMap[id] = t.copyWith(
+          position: newPos,
+          rotation: t.rotation + angle,
+        );
       }
     }
     

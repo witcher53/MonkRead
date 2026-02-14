@@ -75,6 +75,10 @@ class AiNotifier extends StateNotifier<AiState> {
         return;
       }
       _syncState();
+      // Force UI rebuild if successful
+      if (_service.isConfigured) {
+        state = state.copyWith(isConfigured: true); 
+      }
     } catch (e) {
       // Handle platform-specific errors (like MissingPluginException on Windows)
       final msg = e.toString();

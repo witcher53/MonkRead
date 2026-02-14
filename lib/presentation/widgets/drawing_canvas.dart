@@ -141,7 +141,13 @@ class DrawingPainter extends CustomPainter {
        textDirection: TextDirection.ltr,
      );
      tp.layout();
-     tp.paint(canvas, Offset(x, y));
+
+     // Apply text rotation
+     canvas.save();
+     canvas.translate(x, y);
+     canvas.rotate(text.rotation);
+     tp.paint(canvas, Offset.zero);
+     canvas.restore();
   }
 
   void _drawLassoPath(Canvas canvas, List<Offset> points) {
@@ -511,43 +517,47 @@ class _InteractiveTextState extends State<_InteractiveText> {
     return Positioned(
       left: x,
       top: y,
-      child: GestureDetector(
-        onPanUpdate: widget.isTextMode
-            ? (d) {
-                final dx = d.delta.dx / widget.canvasSize.width;
-                final dy = d.delta.dy / widget.canvasSize.height;
-                widget.onDrag?.call(a.id, Offset(dx, dy));
-              }
-            : null,
-        onTap: widget.isTextMode
-            ? () { setState(() => _selected = !_selected); }
-            : null,
-        onDoubleTap: widget.isTextMode 
-            ? () { widget.onEdit?.call(a); } 
-            : null,
-        onLongPress: widget.isTextMode 
-            ? () { widget.onRemove?.call(a.id); } 
-            : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-          decoration: showBorder
-              ? BoxDecoration(
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 1.5,
-                  ),
-                  borderRadius: BorderRadius.circular(3),
-                  color: widget.isSelectedByLasso
-                      ? Colors.blueAccent.withOpacity(0.1)
-                      : null,
-                )
+      child: Transform.rotate(
+        angle: a.rotation,
+        alignment: Alignment.topLeft,
+        child: GestureDetector(
+          onPanUpdate: widget.isTextMode
+              ? (d) {
+                  final dx = d.delta.dx / widget.canvasSize.width;
+                  final dy = d.delta.dy / widget.canvasSize.height;
+                  widget.onDrag?.call(a.id, Offset(dx, dy));
+                }
               : null,
-          child: Text(
-            a.text,
-            style: TextStyle(
-              fontSize: scaledFontSize,
-              color: a.color,
-              fontWeight: FontWeight.w500,
+          onTap: widget.isTextMode
+              ? () { setState(() => _selected = !_selected); }
+              : null,
+          onDoubleTap: widget.isTextMode 
+              ? () { widget.onEdit?.call(a); } 
+              : null,
+          onLongPress: widget.isTextMode 
+              ? () { widget.onRemove?.call(a.id); } 
+              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+            decoration: showBorder
+                ? BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(3),
+                    color: widget.isSelectedByLasso
+                        ? Colors.blueAccent.withOpacity(0.1)
+                        : null,
+                  )
+                : null,
+            child: Text(
+              a.text,
+              style: TextStyle(
+                fontSize: scaledFontSize,
+                color: a.color,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),

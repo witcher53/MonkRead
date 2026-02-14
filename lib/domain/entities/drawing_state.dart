@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' show Color, Offset, Rect;
+import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 
 /// The split-screen layout mode.
 enum SplitViewMode {
@@ -88,6 +89,7 @@ class TextAnnotation {
   final Offset position;
   final Color color;
   final double fontSize;
+  final double rotation; // Radians
 
   const TextAnnotation({
     required this.id,
@@ -95,6 +97,7 @@ class TextAnnotation {
     required this.position,
     this.color = const Color(0xFF000000),
     this.fontSize = 16.0,
+    this.rotation = 0.0,
   });
 
   TextAnnotation copyWith({
@@ -102,6 +105,7 @@ class TextAnnotation {
     Offset? position,
     Color? color,
     double? fontSize,
+    double? rotation,
   }) {
     return TextAnnotation(
       id: id,
@@ -109,6 +113,7 @@ class TextAnnotation {
       position: position ?? this.position,
       color: color ?? this.color,
       fontSize: fontSize ?? this.fontSize,
+      rotation: rotation ?? this.rotation,
     );
   }
 
@@ -119,6 +124,7 @@ class TextAnnotation {
       'position': [position.dx, position.dy],
       'color': color.value,
       'fontSize': fontSize,
+      'rotation': rotation,
     };
   }
 
@@ -133,6 +139,7 @@ class TextAnnotation {
       ),
       color: Color(map['color'] as int),
       fontSize: (map['fontSize'] as num).toDouble(),
+      rotation: (map['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
@@ -219,16 +226,20 @@ class LassoSelection {
     return bounds?.center;
   }
 
-  /// Rotates a point around [center] by [angle] radians.
+  /// Rotates a point around [center] by [angle] radians using Matrix4.
   static Offset rotatePoint(Offset point, Offset center, double angle) {
-    final cosA = math.cos(angle);
-    final sinA = math.sin(angle);
-    final dx = point.dx - center.dx;
-    final dy = point.dy - center.dy;
-    return Offset(
-      center.dx + dx * cosA - dy * sinA,
-      center.dy + dx * sinA + dy * cosA,
-    );
+    if (angle == 0) return point;
+
+    // Use Matrix4 for strict consistency with Lasso visual
+    final matrix = Matrix4.identity()
+      ..translate(center.dx, center.dy)
+      ..rotateZ(angle)
+      ..translate(-center.dx, -center.dy);
+
+    final vec = Vector3(point.dx, point.dy, 0);
+    final result = matrix.transformed3(vec);
+    
+    return Offset(result.x, result.y);
   }
 
   LassoSelection copyWith({
