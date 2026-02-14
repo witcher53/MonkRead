@@ -325,25 +325,29 @@ class DrawingCanvas extends StatelessWidget {
             onPanStart: (isPen || isLasso)
                 ? (d) {
                     var pos = _normalize(d.localPosition, size);
-                    if (isLasso && isRotating && lassoSelection != null) {
+                    final currentLasso = lassoSelection;
+                    if (isLasso && isRotating && currentLasso != null) {
                       // MATRIX FIX: Apply inverse rotation to map pointer back to local space
-                      final bounds = lassoSelection.computeBounds(
+                      final bounds = currentLasso.computeBounds(
                           completedStrokes, textAnnotations);
-                      final center = _normalize(
-                          Offset(bounds.center.dx * size.width,
-                              bounds.center.dy * size.height),
-                          size);
                       
-                      final dx = pos.dx - center.dx;
-                      final dy = pos.dy - center.dy;
-                      
-                      final sin = math.sin(-rotation);
-                      final cos = math.cos(-rotation);
-                      
-                      final newX = dx * cos - dy * sin;
-                      final newY = dx * sin + dy * cos;
-                      
-                      pos = Offset(center.dx + newX, center.dy + newY);
+                      if (bounds != null) {
+                        final center = _normalize(
+                            Offset(bounds.center.dx * size.width,
+                                bounds.center.dy * size.height),
+                            size);
+                        
+                        final dx = pos.dx - center.dx;
+                        final dy = pos.dy - center.dy;
+                        
+                        final sin = math.sin(-rotation);
+                        final cos = math.cos(-rotation);
+                        
+                        final newX = dx * cos - dy * sin;
+                        final newY = dx * sin + dy * cos;
+                        
+                        pos = Offset(center.dx + newX, center.dy + newY);
+                      }
                     }
                     onPanStart(pos);
                   }
@@ -351,25 +355,29 @@ class DrawingCanvas extends StatelessWidget {
             onPanUpdate: (isPen || isLasso)
                 ? (d) {
                     var pos = _normalize(d.localPosition, size);
-                     if (isLasso && isRotating && lassoSelection != null) {
+                    final currentLasso = lassoSelection;
+                     if (isLasso && isRotating && currentLasso != null) {
                       // MATRIX FIX: Apply inverse rotation to map pointer back to local space
-                      final bounds = lassoSelection.computeBounds(
+                      final bounds = currentLasso.computeBounds(
                           completedStrokes, textAnnotations);
-                      final center = _normalize(
-                          Offset(bounds.center.dx * size.width,
-                              bounds.center.dy * size.height),
-                          size);
                       
-                      final dx = pos.dx - center.dx;
-                      final dy = pos.dy - center.dy;
-                      
-                      final sin = math.sin(-rotation);
-                      final cos = math.cos(-rotation);
-                      
-                      final newX = dx * cos - dy * sin;
-                      final newY = dx * sin + dy * cos;
-                      
-                      pos = Offset(center.dx + newX, center.dy + newY);
+                      if (bounds != null) {
+                        final center = _normalize(
+                            Offset(bounds.center.dx * size.width,
+                                bounds.center.dy * size.height),
+                            size);
+                        
+                        final dx = pos.dx - center.dx;
+                        final dy = pos.dy - center.dy;
+                        
+                        final sin = math.sin(-rotation);
+                        final cos = math.cos(-rotation);
+                        
+                        final newX = dx * cos - dy * sin;
+                        final newY = dx * sin + dy * cos;
+                        
+                        pos = Offset(center.dx + newX, center.dy + newY);
+                      }
                     }
                     onPanUpdate(pos);
                   }

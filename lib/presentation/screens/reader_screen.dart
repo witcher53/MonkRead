@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:monkread/domain/entities/pdf_document.dart' as entity;
+import 'package:monkread/domain/entities/pdf_document.dart' as monk;
 import 'package:monkread/domain/entities/drawing_state.dart';
 import 'package:monkread/presentation/providers/drawing_provider.dart';
 import 'package:monkread/presentation/providers/library_provider.dart';
@@ -20,7 +20,7 @@ import 'package:monkread/presentation/widgets/text_input_dialog.dart';
 /// Renders a PDF with per-page drawing/text overlays, optional dual PDF
 /// view, and sidecar infinite whiteboard.
 class ReaderScreen extends ConsumerStatefulWidget {
-  final entity.PdfDocument document;
+  final monk.PdfDocument document;
 
   const ReaderScreen({super.key, required this.document});
 
