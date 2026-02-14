@@ -55,7 +55,7 @@ class DrawingPath {
   Map<String, dynamic> toMap() {
     return {
       'points': points.map((p) => [p.dx, p.dy]).toList(),
-      'color': color.toARGB32(),
+      'color': color.value,
       'strokeWidth': strokeWidth,
     };
   }
@@ -117,7 +117,7 @@ class TextAnnotation {
       'id': id,
       'text': text,
       'position': [position.dx, position.dy],
-      'color': color.toARGB32(),
+      'color': color.value,
       'fontSize': fontSize,
     };
   }

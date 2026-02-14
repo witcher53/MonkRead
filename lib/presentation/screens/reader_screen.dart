@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
-import 'package:monkread/data/services/pdf_export_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -10,20 +9,12 @@ import 'package:monkread/presentation/providers/drawing_provider.dart';
 import 'package:monkread/presentation/providers/library_provider.dart';
 import 'package:monkread/presentation/providers/sidecar_provider.dart';
 import 'package:monkread/presentation/providers/split_view_provider.dart';
-import 'package:monkread/presentation/providers/toolbar_visibility_provider.dart';
-import 'package:monkread/presentation/providers/search_provider.dart';
 import 'package:monkread/presentation/widgets/ai_sidebar.dart';
 import 'package:monkread/presentation/widgets/drawing_canvas.dart';
 import 'package:monkread/presentation/widgets/drawing_toolbar.dart';
-import 'package:monkread/presentation/widgets/search_sidebar.dart';
-import 'package:monkread/presentation/widgets/search_highlight_painter.dart';
 import 'package:monkread/presentation/widgets/sidecar_canvas.dart';
 import 'package:monkread/presentation/widgets/split_handle.dart';
 import 'package:monkread/presentation/widgets/text_input_dialog.dart';
-import 'package:monkread/presentation/widgets/navigation_sidebar.dart';
-import 'package:monkread/presentation/providers/bookmark_provider.dart';
-import 'package:printing/printing.dart';
-import 'dart:io';
 
 /// Renders a PDF with per-page drawing/text overlays, optional dual PDF
 /// view, and sidecar infinite whiteboard.
@@ -41,8 +32,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   int _totalPages = 0;
   bool _isReady = false;
   bool _showAiSidebar = false;
-  bool _showSearchSidebar = false;
-  bool _showNavigationSidebar = false;
   Timer? _debounceTimer;
   final PdfViewerController _pdfController = PdfViewerController();
 
@@ -66,16 +55,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     });
   }
 
-  /// Safely retrieves the document or returns null if controller is detached.
-  PdfDocument? get _safeDocument {
-    try {
-      // This getter throws if controller._state is null in pdfrx
-      return _pdfController.document;
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -90,7 +69,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final isAnnotating = drawingState.isAnnotating;
     final splitState = ref.watch(splitViewProvider);
     final isSplit = splitState.mode != SplitViewMode.none;
-    final toolbarVisible = ref.watch(toolbarVisibilityProvider);
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -106,40 +84,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             widget.document.fileName,
             overflow: TextOverflow.ellipsis,
           ),
-          leadingWidth: 100,
-          leading: Row(
-            children: [
-              const BackButton(),
-              IconButton(
-                icon: const Icon(Icons.grid_view_rounded),
-                onPressed: () => setState(() => _showNavigationSidebar = !_showNavigationSidebar),
-                tooltip: 'Navigation',
-              ),
-            ],
-          ),
           actions: [
-            // Bookmark toggle
-            Consumer(
-              builder: (context, ref, child) {
-                final bookmarks = ref.watch(bookmarkProvider(widget.document.filePath));
-                final isBookmarked = bookmarks.any((b) => b.pageIndex == _currentPage);
-                return IconButton(
-                  icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_border),
-                  color: isBookmarked ? Colors.amber : null,
-                  onPressed: () {
-                    ref.read(bookmarkProvider(widget.document.filePath).notifier).toggleBookmark(_currentPage);
-                  },
-                  tooltip: 'Toggle Bookmark',
-                );
-              },
-            ),
-            // Print
-            IconButton(
-              icon: const Icon(Icons.print),
-              onPressed: _printPdf,
-              tooltip: 'Print',
-            ),
-
             // ── Mode indicator ───────────────────────
             if (isAnnotating)
               Center(
@@ -151,7 +96,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: _indicatorColor(mode).withValues(alpha: 0.15),
+                      color: _indicatorColor(mode).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -191,7 +136,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       color: Theme.of(context)
                           .colorScheme
                           .primary
-                          .withValues(alpha: 0.15),
+                          .withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -204,24 +149,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ),
                 ),
               ),
-            // ── Search button ─────────────────────────────
-            IconButton(
-              icon: Icon(
-                Icons.search_rounded,
-                color: _showSearchSidebar
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              tooltip: 'Search in Document',
-              onPressed: () {
-                setState(() {
-                  _showSearchSidebar = !_showSearchSidebar;
-                  if (!_showSearchSidebar) {
-                    ref.read(searchProvider.notifier).clear();
-                  }
-                });
-              },
-            ),
             // ── AI button ─────────────────────────────
             IconButton(
               icon: Icon(
@@ -233,12 +160,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               tooltip: 'AI Assistant',
               onPressed: () =>
                   setState(() => _showAiSidebar = !_showAiSidebar),
-            ),
-            // ── Export button ─────────────────────────────
-            IconButton(
-              icon: const Icon(Icons.ios_share_rounded),
-              tooltip: 'Export Annotated PDF',
-              onPressed: () => _exportAnnotatedPdf(context),
             ),
           ],
         ),
@@ -269,7 +190,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onSurface
-                                      .withValues(alpha: 0.6),
+                                      .withOpacity(0.6),
                                 ),
                       ),
                     ],
@@ -285,9 +206,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               selectedStrokeWidth: drawingState.selectedStrokeWidth,
               pdfController: _pdfController,
               splitViewMode: splitState.mode,
-              isVisible: toolbarVisible,
-              onToggleVisibility: () =>
-                  ref.read(toolbarVisibilityProvider.notifier).toggle(),
               onTogglePen: () =>
                   ref.read(drawingProvider.notifier).togglePenMode(),
               onToggleText: () =>
@@ -316,145 +234,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ref.read(drawingProvider.notifier).clearCurrentPage(),
             ),
 
-            // ── Show Toolbar FAB (when hidden) ──────────
-            if (!toolbarVisible)
+            // ── AI Sidebar ─────────────────────────────
+            if (_showAiSidebar)
               Positioned(
-                right: 12,
-                bottom: 24,
-                child: FloatingActionButton.small(
-                  heroTag: 'show_toolbar_fab',
-                  onPressed: () =>
-                      ref.read(toolbarVisibilityProvider.notifier).show(),
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  foregroundColor:
-                      Theme.of(context).colorScheme.onPrimaryContainer,
-                  child: const Icon(Icons.chevron_left_rounded),
+                top: 0,
+                right: 0,
+                bottom: 0,
+                child: AiSidebar(
+                  onExtractPageText: _extractCurrentPageText,
+                  onClose: () => setState(() => _showAiSidebar = false),
                 ),
               ),
-
-            // ── Sidebars (Only show when ready AND document is available) ────────────────
-            if (_isReady && _safeDocument != null) ...[
-              
-              // Helper for mobile scrim
-              if (MediaQuery.of(context).size.width < 600) ...[
-                // Mobile: Scrim + Overlay
-                if (_showNavigationSidebar)
-                  Positioned.fill(
-                    child: Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() => _showNavigationSidebar = false),
-                          child: Container(color: Colors.black54),
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: SizedBox(
-                            width: MediaQuery.of(context).size.width * 0.85,
-                            child: NavigationSidebar(
-                              controller: _pdfController,
-                              document: _safeDocument!,
-                              filePath: widget.document.filePath,
-                              onClose: () => setState(() => _showNavigationSidebar = false),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                if (_showAiSidebar)
-                  Positioned.fill(
-                    child: Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() => _showAiSidebar = false),
-                          child: Container(color: Colors.black54),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: SizedBox(
-                            width: MediaQuery.of(context).size.width * 0.85,
-                            child: AiSidebar(
-                              onExtractPageText: _extractCurrentPageText,
-                              onClose: () => setState(() => _showAiSidebar = false),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                if (_showSearchSidebar)
-                  Positioned.fill(
-                    child: Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                             setState(() => _showSearchSidebar = false);
-                             ref.read(searchProvider.notifier).clear();
-                          },
-                          child: Container(color: Colors.black54),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: SizedBox(
-                            width: MediaQuery.of(context).size.width * 0.85,
-                            child: SearchSidebar(
-                              filePath: widget.document.filePath,
-                              pdfController: _pdfController,
-                              onClose: () {
-                                setState(() => _showSearchSidebar = false);
-                                ref.read(searchProvider.notifier).clear();
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ] else ...[
-                // Desktop: Standard Sidebars (Push content or overlay)
-                if (_showAiSidebar)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: AiSidebar(
-                      onExtractPageText: _extractCurrentPageText,
-                      onClose: () => setState(() => _showAiSidebar = false),
-                    ),
-                  ),
-
-                if (_showNavigationSidebar)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    bottom: 0,
-                    child: NavigationSidebar(
-                      controller: _pdfController,
-                      document: _safeDocument!,
-                      filePath: widget.document.filePath,
-                      onClose: () => setState(() => _showNavigationSidebar = false),
-                    ),
-                  ),
-
-                if (_showSearchSidebar)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: SearchSidebar(
-                      filePath: widget.document.filePath,
-                      pdfController: _pdfController,
-                      onClose: () {
-                        setState(() => _showSearchSidebar = false);
-                        ref.read(searchProvider.notifier).clear();
-                      },
-                    ),
-                  ),
-              ],
-            ],
           ],
         ),
       ),
@@ -477,24 +267,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       debugPrint('Text extraction error: $e');
     }
     return 'Could not extract text from this page. The page may be scanned/image-based.';
-  }
-
-  Future<void> _printPdf() async {
-    try {
-      final file = File(widget.document.filePath);
-      final bytes = await file.readAsBytes();
-      await Printing.layoutPdf(
-        onLayout: (format) async => bytes,
-        name: widget.document.fileName,
-      );
-    } catch (e) {
-      debugPrint('Print error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to print: $e')),
-        );
-      }
-    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -553,25 +325,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final textAnnotations =
         drawingState.textAnnotationsForPage(pageIndex);
 
-    // Search highlights for this page
-    final searchState = ref.watch(searchProvider);
-    final searchMatches = searchState.results
-        .where((r) => r.pageIndex == pageIndex)
-        .toList();
-
     return [
-      // Search highlight layer (below drawing canvas)
-      if (searchMatches.isNotEmpty)
-        for (final match in searchMatches)
-          Positioned.fill(
-            child: CustomPaint(
-              painter: SearchHighlightPainter(
-                matchBounds: match.bounds,
-                isCurrentMatch: searchState.currentResult == match,
-              ),
-            ),
-          ),
-      // Drawing canvas layer
       Positioned.fill(
         child: DrawingCanvas(
           annotationMode: mode,
@@ -698,7 +452,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     return PdfViewer.file(
       filePath,
       controller: _secondaryPdfController,
-      params: const PdfViewerParams(
+      params: PdfViewerParams(
         maxScale: 8.0,
         scrollByMouseWheel: 1.5,
       ),
@@ -766,14 +520,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   void _handleToggleDualPdf() {
-    // Close sidebars to prevent crash during rebuild/transition
-    setState(() {
-      _isReady = false; // Force UI to wait for new viewer reuse
-      _showNavigationSidebar = false;
-      _showSearchSidebar = false;
-      _showAiSidebar = false;
-    });
-
     final current = ref.read(splitViewProvider).mode;
     if (current == SplitViewMode.dualPdf) {
       ref.read(splitViewProvider.notifier).closeSplitView();
@@ -944,41 +690,5 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       AnnotationMode.lasso => 'Lasso',
       AnnotationMode.none => '',
     };
-  }
-
-  // ── Export ────────────────────────────────────────────────────
-
-  Future<void> _exportAnnotatedPdf(BuildContext ctx) async {
-    final drawingState = ref.read(drawingProvider);
-    if (!mounted) return;
-
-    final messenger = ScaffoldMessenger.of(ctx);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Exporting annotated PDF…')),
-    );
-
-    final result = await PdfExportService.exportWithAnnotations(
-      sourceFilePath: widget.document.filePath,
-      drawingState: drawingState,
-      totalPages: _totalPages,
-      pageWidthPt: 612, // US Letter default
-      pageHeightPt: 792,
-    );
-
-    if (!mounted) return;
-    messenger.clearSnackBars();
-
-    if (result != null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Exported to: $result')),
-      );
-    } else {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Export failed. Check logs for details.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 }

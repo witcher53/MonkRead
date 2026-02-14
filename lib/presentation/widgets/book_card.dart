@@ -36,7 +36,7 @@ class BookCard extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  color: theme.colorScheme.primary.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -63,7 +63,7 @@ class BookCard extends StatelessWidget {
               Text(
                 _formatDate(book.lastOpened),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
                 ),
               ),
             ],

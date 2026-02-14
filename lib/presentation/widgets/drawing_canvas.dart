@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
 
@@ -11,11 +11,6 @@ class DrawingPainter extends CustomPainter {
   final Rect? selectionBounds;
   final Size canvasSize;
   final List<TextAnnotation> textAnnotations;
-  // ── Paint cache for completed strokes ──────────────────────
-  // Only rebuilt when completedStrokes identity changes.
-  static ui.Picture? _cachedPicture;
-  static List<DrawingPath>? _cachedStrokes;
-  static Size? _cachedSize;
 
   DrawingPainter({
     required this.completedStrokes,
@@ -47,31 +42,9 @@ class DrawingPainter extends CustomPainter {
       }
     }
 
-    // 2. Draw Unselected Strokes (with cache)
-    final needsCacheRebuild = !identical(_cachedStrokes, completedStrokes) ||
-        _cachedSize != canvasSize ||
-        _cachedPicture == null;
-
-    if (hasLasso || needsCacheRebuild) {
-      // When lasso is active, we can't use the full cache because
-      // strokes are split into selected/unselected. Draw directly.
-      for (final stroke in unselectedStrokes) {
-        _drawStroke(canvas, stroke, Offset.zero);
-      }
-      // Also conditionally rebuild cache for non-lasso scenarios
-      if (!hasLasso && needsCacheRebuild) {
-        final recorder = ui.PictureRecorder();
-        final cacheCanvas = Canvas(recorder);
-        for (final stroke in completedStrokes) {
-          _drawStroke(cacheCanvas, stroke, Offset.zero);
-        }
-        _cachedPicture = recorder.endRecording();
-        _cachedStrokes = completedStrokes;
-        _cachedSize = canvasSize;
-      }
-    } else {
-      // Fast path: replay cached picture
-      canvas.drawPicture(_cachedPicture!);
+    // 2. Draw Unselected Strokes
+    for (final stroke in unselectedStrokes) {
+      _drawStroke(canvas, stroke, Offset.zero);
     }
 
     // 3. Draw Selected Items (Maybe Rotated)
@@ -139,7 +112,7 @@ class DrawingPainter extends CustomPainter {
     if (stroke.points.length < 2) return;
 
     final paint = Paint()
-      ..color = Colors.blueAccent.withValues(alpha: 0.3)
+      ..color = Colors.blueAccent.withOpacity(0.3)
       ..strokeWidth = stroke.strokeWidth + 4.0
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
@@ -486,7 +459,7 @@ class _InteractiveTextState extends State<_InteractiveText> {
                   ),
                   borderRadius: BorderRadius.circular(3),
                   color: widget.isSelectedByLasso
-                      ? Colors.blueAccent.withValues(alpha: 0.1)
+                      ? Colors.blueAccent.withOpacity(0.1)
                       : null,
                 )
               : null,

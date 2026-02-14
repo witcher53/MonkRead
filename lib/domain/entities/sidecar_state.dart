@@ -1,3 +1,4 @@
+import 'dart:ui' show Color, Offset;
 import 'package:monkread/domain/entities/drawing_state.dart';
 
 /// State for the sidecar (infinite whiteboard) notes panel.
@@ -6,9 +7,6 @@ import 'package:monkread/domain/entities/drawing_state.dart';
 /// normalized coordinates (0–1) relative to canvas width, but
 /// Y can exceed 1.0 since the canvas scrolls infinitely.
 class SidecarState {
-  /// Hard limit to prevent OOM from infinite canvas growth.
-  static const double maxCanvasHeight = 20000.0;
-
   final String filePath;
   final List<DrawingPath> strokes;
   final List<TextAnnotation> textAnnotations;

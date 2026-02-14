@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart'; // Just for platform check if needed, or path manipulation
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:monkread/domain/entities/book_entity.dart';
 import 'package:monkread/presentation/providers/library_provider.dart';
@@ -63,40 +65,24 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
       }
       
       final savePath = p.join(dir.path, fileName);
+      
+      // Check if file exists, maybe append counter?
+      // For now, overwrite or simple check.
+      // Let's overwrite for simplicity, or fail?
+      // Overwrite is fine.
 
-      // Retry loop: up to 3 attempts on connection timeout
-      const maxRetries = 3;
-      const retryDelay = Duration(seconds: 2);
-
-      for (int attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          await _dio.download(
-            url,
-            savePath,
-            onReceiveProgress: (received, total) {
-              if (total != -1) {
-                state = DownloadState(
-                  isDownloading: true,
-                  progress: received / total,
-                );
-              }
-            },
-          );
-          break; // Success — exit retry loop
-        } on DioException catch (e) {
-          if (e.type == DioExceptionType.connectionTimeout &&
-              attempt < maxRetries) {
+      await _dio.download(
+        url,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
             state = DownloadState(
               isDownloading: true,
-              progress: 0.0,
-              error: 'Connection timed out. Retrying ($attempt/$maxRetries)…',
+              progress: received / total,
             );
-            await Future.delayed(retryDelay);
-            continue;
           }
-          rethrow; // Non-timeout or final attempt — propagate
-        }
-      }
+        },
+      );
 
       // Download complete
       state = const DownloadState(

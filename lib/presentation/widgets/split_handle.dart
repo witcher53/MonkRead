@@ -28,16 +28,15 @@ class SplitHandle extends StatelessWidget {
       onPanEnd: (_) => onDragEnd?.call(),
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeColumn,
-        // Increased touch target width to 44.0 for easier grabbing on mobile
         child: Container(
-          width: 44.0,
-          color: Colors.transparent, // Invisible hit-test area
+          width: 24,
+          color: Colors.transparent,
           child: Center(
             child: Container(
               width: 4,
-              height: 48, // Slightly taller visual handle
+              height: 40,
               decoration: BoxDecoration(
-                color: theme.colorScheme.outline.withAlpha(150),
+                color: theme.colorScheme.outline.withAlpha(100),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

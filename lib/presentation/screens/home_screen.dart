@@ -100,7 +100,7 @@ class HomeScreen extends ConsumerWidget {
                 color: Theme.of(context)
                     .colorScheme
                     .primary
-                    .withValues(alpha: 0.12),
+                    .withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -124,7 +124,7 @@ class HomeScreen extends ConsumerWidget {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withValues(alpha: 0.6),
+                        .withOpacity(0.6),
                   ),
               textAlign: TextAlign.center,
             ),

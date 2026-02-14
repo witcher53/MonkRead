@@ -41,6 +41,7 @@ class SidecarCanvas extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPen = annotationMode == AnnotationMode.pen;
     final isText = annotationMode == AnnotationMode.text;
+    final isAnnotating = annotationMode != AnnotationMode.none;
     final theme = Theme.of(context);
 
     return Container(
@@ -56,7 +57,7 @@ class SidecarCanvas extends StatelessWidget {
               color: theme.colorScheme.surfaceContainerHighest,
               border: Border(
                 bottom: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                  color: theme.colorScheme.outline.withOpacity(0.2),
                 ),
               ),
             ),

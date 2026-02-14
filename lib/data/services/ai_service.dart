@@ -85,13 +85,14 @@ class AiService {
   /// On Windows Desktop: if the browser doesn't open, the consent URL
   /// is printed to the debug console as a safety net.
   Future<String?> signInWithGoogle() async {
-    // On Windows/Linux, google_sign_in plugin is not available —
-    // return early with a user-friendly message instead of crashing.
+    // On Windows, warn about potential issues up front
     final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux);
 
     if (isDesktop) {
-      return 'Google Sign-In is not supported on desktop platforms.\n'
-          'Please use an API Key instead (paste it in the field below).';
+      debugPrint('╔══════════════════════════════════════════════════╗');
+      debugPrint('║  Google Sign-In: attempting desktop OAuth flow   ║');
+      debugPrint('║  If the browser doesn\'t open, use an API key.   ║');
+      debugPrint('╚══════════════════════════════════════════════════╝');
     }
 
     try {

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show Color, Offset, Path;
+import 'dart:ui' show Color, Offset, Path, Rect;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -492,14 +492,7 @@ class DrawingNotifier extends StateNotifier<DocumentDrawingState> {
     );
   }
 
-  DateTime _lastRotationUpdate = DateTime(0);
-
   void _updateRotation(Offset point) {
-    // Throttle: skip updates if < 16ms since last (cap at ~60fps)
-    final now = DateTime.now();
-    if (now.difference(_lastRotationUpdate).inMilliseconds < 16) return;
-    _lastRotationUpdate = now;
-
     // VISUAL ONLY: Update angle. DO NOT MODIFY POINTS.
     final lasso = state.lassoSelection;
     if (lasso == null || _fixedPivot == null) return;

@@ -60,13 +60,10 @@ class SidecarNotifier extends StateNotifier<SidecarState> {
     if (stroke == null) return;
     state = state.copyWith(activeStroke: stroke.addPoint(point));
 
-    // Auto-grow canvas if drawing near bottom (capped at max)
+    // Auto-grow canvas if drawing near bottom
     final maxY = point.dy * state.canvasHeight;
-    if (maxY > state.canvasHeight - 200 &&
-        state.canvasHeight < SidecarState.maxCanvasHeight) {
-      final newHeight = (state.canvasHeight + 500)
-          .clamp(0.0, SidecarState.maxCanvasHeight);
-      state = state.copyWith(canvasHeight: newHeight);
+    if (maxY > state.canvasHeight - 200) {
+      state = state.copyWith(canvasHeight: state.canvasHeight + 500);
     }
   }
 
