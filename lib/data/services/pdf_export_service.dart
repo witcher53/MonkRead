@@ -73,8 +73,11 @@ class PdfExportService {
         html.document.body?.children.add(anchor);
         anchor.click();
 
-        html.document.body?.children.remove(anchor);
-        html.Url.revokeObjectUrl(url);
+        // Fix Phantom Export: Delay cleanup to allow download to trigger
+        Timer(const Duration(seconds: 2), () {
+          html.document.body?.children.remove(anchor);
+          html.Url.revokeObjectUrl(url);
+        });
         return 'downloaded';
       } else {
         // Mobile implementation omitted for web-focus.

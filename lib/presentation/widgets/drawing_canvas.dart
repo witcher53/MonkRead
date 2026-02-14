@@ -303,36 +303,24 @@ class DrawingCanvas extends StatelessWidget {
             behavior: HitTestBehavior.translucent,
             onPanStart: (isPen || isLasso)
                 ? (d) {
-                    var pos = _normalize(d.localPosition, size);
+                    final renderBox = context.findRenderObject() as RenderBox?;
+                    if (renderBox == null) return;
                     
-                    // Apply Matrix Fix for Lasso Rotation logic: Invert parent transform
-                    if (isLasso && (lassoSelection?.rotationAngle ?? 0) != 0) {
-                        final renderBox = context.findRenderObject() as RenderBox?;
-                        if (renderBox != null) {
-                           final matrix = renderBox.getTransformTo(null)..invert();
-                           // Transform global point to local coordinate basics
-                           final localPoint = vector_math.Matrix4.fromFloat64List(matrix.storage).transformed3(vector_math.Vector3(d.globalPosition.dx, d.globalPosition.dy, 0));
-                           pos = _normalize(Offset(localPoint.x, localPoint.y), size);
-                        }
-                    }
-                    onPanStart(pos);
+                    // Dead Rotation Fix: RotatedBox handles the transform, 
+                    // so we just map global point to local and normalize.
+                    final local = renderBox.globalToLocal(d.globalPosition);
+                    onPanStart(_normalize(local, size));
                   }
                 : null,
             onPanUpdate: (isPen || isLasso)
                 ? (d) {
-                    var pos = _normalize(d.localPosition, size);
-                    
-                    // Apply Matrix Fix for Lasso Rotation logic
-                    if (isLasso && (lassoSelection?.rotationAngle ?? 0) != 0) {
-                        final renderBox = context.findRenderObject() as RenderBox?;
-                        if (renderBox != null) {
-                           final matrix = renderBox.getTransformTo(null)..invert();
-                           final localPoint = vector_math.Matrix4.fromFloat64List(matrix.storage).transformed3(vector_math.Vector3(d.globalPosition.dx, d.globalPosition.dy, 0));
-                           pos = _normalize(Offset(localPoint.x, localPoint.y), size);
-                        }
-                    }
+                    final renderBox = context.findRenderObject() as RenderBox?;
+                    if (renderBox == null) return;
 
-                    onPanUpdate(pos);
+                    // Dead Rotation Fix: RotatedBox handles the transform.
+                    // Simple globalToLocal is sufficient.
+                    final local = renderBox.globalToLocal(d.globalPosition);
+                    onPanUpdate(_normalize(local, size));
                   }
                 : null,
             onPanEnd: (isPen || isLasso)

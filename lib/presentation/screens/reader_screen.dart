@@ -35,6 +35,7 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   int _currentPage = 0;
   int _totalPages = 0;
+  int _rotation = 0; // 0=0, 1=90, 2=180, 3=270
   bool _isReady = false;
   bool _showAiSidebar = false;
   bool _showSidenav = false;
@@ -429,6 +430,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   Widget _buildPrimaryPdf(AnnotationMode mode, bool isAnnotating) {
     final params = PdfViewerParams(
+      rotation: _rotation * 90, // Sync rotation with state
       maxScale: 8.0,
       scrollByMouseWheel: 1.5,
       scaleEnabled: !isAnnotating,
@@ -495,37 +497,40 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     return [
       Positioned.fill(
-        child: DrawingCanvas(
-          annotationMode: mode,
-          currentPage: pageIndex,
-          completedStrokes: pageStrokes,
-          activeStroke: activeStroke,
-          lassoSelection: lassoSelection,
-          textAnnotations: textAnnotations,
-          pageWidthPt: page.width,
-          onPanStart: (pos) {
-            ref.read(drawingProvider.notifier).handlePanStart(pageIndex, pos);
-          },
-          onPanUpdate: (pos) {
-            ref.read(drawingProvider.notifier).handlePanUpdate(pos);
-          },
-          onPanEnd: () {
-            ref.read(drawingProvider.notifier).handlePanEnd();
-          },
-          onTextTap: (normalizedPos) {
-            _showTextInputDialog(pageIndex, normalizedPos);
-          },
-          onTextRemove: (id) {
-            ref
-                .read(drawingProvider.notifier)
-                .removeTextAnnotation(pageIndex, id);
-          },
-          onTextDrag: (id, delta) {
-            _handleTextDrag(pageIndex, id, delta);
-          },
-          onTextEdit: (annotation) {
-            _editTextAnnotation(pageIndex, annotation);
-          },
+        child: RotatedBox(
+          quarterTurns: _rotation,
+          child: DrawingCanvas(
+            annotationMode: mode,
+            currentPage: pageIndex,
+            completedStrokes: pageStrokes,
+            activeStroke: activeStroke,
+            lassoSelection: lassoSelection,
+            textAnnotations: textAnnotations,
+            pageWidthPt: page.width,
+            onPanStart: (pos) {
+              ref.read(drawingProvider.notifier).handlePanStart(pageIndex, pos);
+            },
+            onPanUpdate: (pos) {
+              ref.read(drawingProvider.notifier).handlePanUpdate(pos);
+            },
+            onPanEnd: () {
+              ref.read(drawingProvider.notifier).handlePanEnd();
+            },
+            onTextTap: (normalizedPos) {
+              _showTextInputDialog(pageIndex, normalizedPos);
+            },
+            onTextRemove: (id) {
+              ref
+                  .read(drawingProvider.notifier)
+                  .removeTextAnnotation(pageIndex, id);
+            },
+            onTextDrag: (id, delta) {
+              _handleTextDrag(pageIndex, id, delta);
+            },
+            onTextEdit: (annotation) {
+              _editTextAnnotation(pageIndex, annotation);
+            },
+          ),
         ),
       ),
     ];
