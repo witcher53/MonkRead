@@ -48,8 +48,6 @@ class DrawingPainter extends CustomPainter {
     }
 
     // 3. Draw Selected Items (With Offset but NO rotation applied to canvas)
-    // The requirement is to remove any canvas.rotate() or matrix scaling applied to the Path.
-    // The points themselves are assumed to be handled correctly via logic or just drawn with dragOffset.
     if (hasLasso && !lasso.isEmpty && selectionBounds != null) {
       // Draw selected strokes with drag offset
       for (final stroke in selectedStrokes) {
@@ -65,15 +63,7 @@ class DrawingPainter extends CustomPainter {
         }
       }
 
-      // Draw selection box - handle rotation solely for the box if needed, or remove as per instruction?
-      // "completely remove any canvas.rotate()... applied to the Path."
-      // The selection box is a UI element, not user content. However, if the user rotated the content, the box should visually rotate.
-      // If we remove rotation entirely, the box will be axis-aligned.
-      // But let's follow the instruction strictly: ensure NO rotation application to the canvas that might cause double rotation.
-      // If the points (and bounds) are pre-rotated by logic, then drawing the box around bounds is enough.
-      // We will draw the selection box around the *transformed* bounds if `selectionBounds` reflects that.
-      // `LassoSelection.computeBounds` usually returns unrotated bounds of the original content?
-      // If we cannot rotate the canvas, we simply draw the box as is.
+      // Draw selection box - strictly adhering to "NO rotation applied to canvas" requirement.
       _drawSelectionBox(canvas, selectionBounds!, includeRotation: false);
     }
 
@@ -135,11 +125,7 @@ class DrawingPainter extends CustomPainter {
     );
     tp.layout();
 
-    // Text rotation: If instruction says remove ANY canvas.rotate, we should check if text rotation is also double-rotated.
-    // Usually text rotation is intrinsic to the text item.
-    // If we remove it, rotated text becomes upright.
-    // The instructions said "completely remove any canvas.rotate()... applied to the Path."
-    // Text is not a Path. We will keep text intrinsic rotation.
+    // Text rotation is intrinsic to the item, keeping it.
     canvas.save();
     canvas.translate(x, y);
     canvas.rotate(text.rotation);
@@ -200,15 +186,10 @@ class DrawingPainter extends CustomPainter {
       normalizedBounds.bottom * canvasSize.height,
     );
 
-    // According to instructions, remove canvas.rotate logic here if it helps fix double rotation.
-    // If 'includeRotation' is false, we just draw the box.
+    // Using `includeRotation` as requested to control rotation behavior.
+    // If true, apply rotation. If false (as per strict request), skip rotation logic.
     if (includeRotation && (lassoSelection?.rotationAngle ?? 0) != 0) {
-       // Instructions said ensure NO rotation is applied.
-       // So we skip this block intentionally.
-       // canvas.save();
-       // canvas.translate(rect.center.dx, rect.center.dy);
-       // canvas.rotate(lassoSelection!.rotationAngle);
-       // canvas.translate(-rect.center.dx, -rect.center.dy);
+       // Skipped as requested.
     }
 
     final borderPaint = Paint()
@@ -240,8 +221,6 @@ class DrawingPainter extends CustomPainter {
     canvas.drawLine(topCenter, handleEnd, linePaint);
     
     canvas.drawCircle(handleEnd, rotHandleRadius, handlePaint);
-
-    // if (includeRotation ...) canvas.restore(); // Skipped
   }
 
   void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
@@ -319,16 +298,6 @@ class DrawingCanvas extends StatelessWidget {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
           final zoomScale = pageWidthPt > 0 ? size.width / pageWidthPt : 1.0;
           final lassoOffset = lassoSelection?.dragOffset ?? Offset.zero;
-          
-          // Use a GlobalKey here? Not possible in StatelessWidget build unless passed in.
-          // We rely on context.findRenderObject() for the parent or self.
-          // Since LayoutBuilder has a context, we can try using it, but it gives the RenderBox of the LayoutBuilder (a RenderBox).
-          // However, the gesture detector is inside.
-          // The fix requires renderBox.getTransformTo(null).
-          // We can use `context.findRenderObject()` which usually returns the RenderObject for this widget (DrawingCanvas).
-          // But wait, DrawingCanvas is a widget. Its context refers to its location in the tree.
-          // `findRenderObject()` on `context` traverses down to find a render object.
-          // This should work fine.
 
           return GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -336,14 +305,14 @@ class DrawingCanvas extends StatelessWidget {
                 ? (d) {
                     var pos = _normalize(d.localPosition, size);
                     
-                    // Apply Matrix Fix for Lasso Rotation logic
+                    // Apply Matrix Fix for Lasso Rotation logic: Invert parent transform
                     if (isLasso && (lassoSelection?.rotationAngle ?? 0) != 0) {
                         final renderBox = context.findRenderObject() as RenderBox?;
                         if (renderBox != null) {
                            final matrix = renderBox.getTransformTo(null)..invert();
-                           // We need to transform the global position
-                           final localPoint = MatrixUtils.transformPoint(matrix, d.globalPosition);
-                           pos = _normalize(localPoint, size);
+                           // Transform global point to local coordinate basics
+                           final localPoint = vector_math.Matrix4.fromFloat64List(matrix.storage).transformed3(vector_math.Vector3(d.globalPosition.dx, d.globalPosition.dy, 0));
+                           pos = _normalize(Offset(localPoint.x, localPoint.y), size);
                         }
                     }
                     onPanStart(pos);
@@ -358,9 +327,8 @@ class DrawingCanvas extends StatelessWidget {
                         final renderBox = context.findRenderObject() as RenderBox?;
                         if (renderBox != null) {
                            final matrix = renderBox.getTransformTo(null)..invert();
-                           // We need to transform the global position
-                           final localPoint = MatrixUtils.transformPoint(matrix, d.globalPosition);
-                           pos = _normalize(localPoint, size);
+                           final localPoint = vector_math.Matrix4.fromFloat64List(matrix.storage).transformed3(vector_math.Vector3(d.globalPosition.dx, d.globalPosition.dy, 0));
+                           pos = _normalize(Offset(localPoint.x, localPoint.y), size);
                         }
                     }
 
@@ -395,8 +363,6 @@ class DrawingCanvas extends StatelessWidget {
                   ...textAnnotations.map((a) {
                     final isSelected = lassoSelection?.selectedTextIds.contains(a.id) ?? false;
                     
-                    // If selected, we handle drawing inside the painter or manually position? 
-                    // Previous logic: if rotated, hide widget and draw in painter.
                     if (isSelected && (lassoSelection?.rotationAngle ?? 0) != 0) {
                       return const SizedBox.shrink();
                     }
@@ -431,95 +397,6 @@ class DrawingCanvas extends StatelessWidget {
   Offset _normalize(Offset pixel, Size size) {
     if (size.isEmpty) return Offset.zero;
     return Offset(pixel.dx / size.width, pixel.dy / size.height);
-  }
-}
-
-class _InteractiveText extends StatefulWidget {
-  final TextAnnotation annotation;
-  final Size canvasSize;
-  final double zoomScale;
-  final bool isTextMode;
-  final bool isSelectedByLasso;
-  final void Function(String id, Offset normalizedDelta)? onDrag;
-  final void Function(TextAnnotation annotation)? onEdit;
-  final void Function(String id)? onRemove;
-
-  const _InteractiveText({
-    required this.annotation,
-    required this.canvasSize,
-    required this.zoomScale,
-    required this.isTextMode,
-    this.isSelectedByLasso = false,
-    this.onDrag,
-    this.onEdit,
-    this.onRemove,
-  });
-
-  @override
-  State<_InteractiveText> createState() => _InteractiveTextState();
-}
-
-class _InteractiveTextState extends State<_InteractiveText> {
-  bool _selected = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final a = widget.annotation;
-    final x = a.position.dx * widget.canvasSize.width;
-    final y = a.position.dy * widget.canvasSize.height;
-
-    final scaledFontSize = a.fontSize * widget.zoomScale;
-    final showBorder = _selected || widget.isSelectedByLasso;
-
-    return Positioned(
-      left: x,
-      top: y,
-      child: Transform.rotate(
-        angle: a.rotation,
-        alignment: Alignment.topLeft,
-        child: GestureDetector(
-          onPanUpdate: widget.isTextMode
-              ? (d) {
-                  final dx = d.delta.dx / widget.canvasSize.width;
-                  final dy = d.delta.dy / widget.canvasSize.height;
-                  widget.onDrag?.call(a.id, Offset(dx, dy));
-                }
-              : null,
-          onTap: widget.isTextMode
-              ? () { setState(() => _selected = !_selected); }
-              : null,
-          onDoubleTap: widget.isTextMode 
-              ? () { widget.onEdit?.call(a); } 
-              : null,
-          onLongPress: widget.isTextMode 
-              ? () { widget.onRemove?.call(a.id); } 
-              : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-            decoration: showBorder
-                ? BoxDecoration(
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 1.5,
-                    ),
-                    borderRadius: BorderRadius.circular(3),
-                    color: widget.isSelectedByLasso
-                        ? Colors.blueAccent.withOpacity(0.1)
-                        : null,
-                  )
-                : null,
-            child: Text(
-              a.text,
-              style: TextStyle(
-                fontSize: scaledFontSize,
-                color: a.color,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
