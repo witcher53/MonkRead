@@ -171,10 +171,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ],
         ),
         // Mobile Drawer
-        drawer: MediaQuery.of(context).size.width < 900
+        drawer: (MediaQuery.of(context).size.width < 900 && _isReady && _pdfController.document != null)
             ? NavigationSidebar(
                 controller: _pdfController,
-                document: widget.document,
+                document: _pdfController.document!,
                 filePath: widget.document.filePath,
                 onClose: () => Navigator.pop(context),
               )
@@ -182,10 +182,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         body: Row(
           children: [
             // Desktop Sidebar
-            if (_showSidenav && MediaQuery.of(context).size.width >= 900)
+            if (_showSidenav && MediaQuery.of(context).size.width >= 900 && _isReady && _pdfController.document != null)
               NavigationSidebar(
                 controller: _pdfController,
-                document: widget.document,
+                document: _pdfController.document!,
                 filePath: widget.document.filePath,
                 onClose: () => setState(() => _showSidenav = false),
               ),
