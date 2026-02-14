@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -202,21 +204,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 final book = books[index];
                 return BookCard(
                   book: book,
-                  onTap: () {
+                  onTap: () async {
+                    Uint8List? bytes;
+                    if (kIsWeb) {
+                      final cached = await ref
+                          .read(fileRepositoryProvider)
+                          .getLastOpenedPdf();
+                      if (cached != null && cached.fileName == book.fileName) {
+                        bytes = cached.bytes;
+                      }
+                    }
+
                     // Update last opened time
                     ref.read(libraryProvider.notifier).addBook(
                           book.copyWith(lastOpened: DateTime.now()),
                         );
 
-                    // Navigate to reader
-                    context.push(
-                      AppConstants.readerRoute,
-                      extra: PdfDocument(
-                        filePath: book.filePath,
-                        fileName: book.fileName,
-                        lastPage: book.lastPage,
-                      ),
-                    );
+                    if (context.mounted) {
+                      // Navigate to reader
+                      context.push(
+                        AppConstants.readerRoute,
+                        extra: PdfDocument(
+                          filePath: book.filePath,
+                          fileName: book.fileName,
+                          lastPage: book.lastPage,
+                          bytes: bytes,
+                        ),
+                      );
+                    }
                   },
                   onLongPress: () {
                     _showDeleteDialog(context, ref, book);

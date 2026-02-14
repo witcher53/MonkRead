@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:monkread/data/repositories/book_repository_impl.dart';
 import 'package:monkread/domain/entities/book_entity.dart';
 import 'package:monkread/domain/repositories/book_repository.dart';
+import 'package:monkread/domain/repositories/file_repository.dart';
+import 'package:monkread/presentation/providers/file_provider.dart';
 
 // ── Repository provider ──────────────────────────────────────────
 
@@ -13,16 +15,18 @@ final bookRepositoryProvider = Provider<BookRepository>((ref) {
 
 /// Manages the user's book library backed by Hive.
 class LibraryNotifier extends StateNotifier<AsyncValue<List<BookEntity>>> {
-  final BookRepository _repository;
+  final BookRepository _bookRepository;
+  final FileRepository _fileRepository;
 
-  LibraryNotifier(this._repository) : super(const AsyncValue.loading()) {
+  LibraryNotifier(this._bookRepository, this._fileRepository)
+      : super(const AsyncValue.loading()) {
     loadBooks();
   }
 
   /// Loads all books from the database.
   Future<void> loadBooks() async {
     try {
-      final books = await _repository.getBooks();
+      final books = await _bookRepository.getBooks();
       state = AsyncValue.data(books);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -31,7 +35,7 @@ class LibraryNotifier extends StateNotifier<AsyncValue<List<BookEntity>>> {
 
   /// Adds or updates a book in the library (called when a PDF is opened).
   Future<void> addBook(BookEntity book) async {
-    await _repository.saveBook(book);
+    await _bookRepository.saveBook(book);
     await loadBooks(); // Refresh the list
   }
 
@@ -44,7 +48,7 @@ class LibraryNotifier extends StateNotifier<AsyncValue<List<BookEntity>>> {
         lastPage: page,
         lastOpened: DateTime.now(),
       );
-      await _repository.saveBook(updated);
+      await _bookRepository.saveBook(updated);
       // Update in-memory state without full reload
       state = AsyncValue.data(
         books.map((b) => b.filePath == filePath ? updated : b).toList(),
@@ -54,7 +58,9 @@ class LibraryNotifier extends StateNotifier<AsyncValue<List<BookEntity>>> {
 
   /// Removes a book from the library.
   Future<void> removeBook(String filePath) async {
-    await _repository.removeBook(filePath);
+    await _bookRepository.removeBook(filePath);
+    // Also clear the web cache (bytes) to free memory
+    await _fileRepository.clearLastPdfCache();
     await loadBooks();
   }
 }
@@ -63,6 +69,7 @@ class LibraryNotifier extends StateNotifier<AsyncValue<List<BookEntity>>> {
 
 final libraryProvider =
     StateNotifierProvider<LibraryNotifier, AsyncValue<List<BookEntity>>>((ref) {
-  final repository = ref.watch(bookRepositoryProvider);
-  return LibraryNotifier(repository);
+  final bookRepository = ref.watch(bookRepositoryProvider);
+  final fileRepository = ref.watch(fileRepositoryProvider);
+  return LibraryNotifier(bookRepository, fileRepository);
 });

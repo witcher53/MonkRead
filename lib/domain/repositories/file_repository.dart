@@ -19,4 +19,7 @@ abstract class FileRepository {
   /// Retrieves the last opened PDF document (Web persistence).
   /// Returns `null` on native platforms or if no file is cached.
   Future<PdfDocument?> getLastOpenedPdf();
+
+  /// Clears the last cached PDF from storage (Web only).
+  Future<void> clearLastPdfCache();
 }

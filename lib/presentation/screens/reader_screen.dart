@@ -428,39 +428,51 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildPrimaryPdf(AnnotationMode mode, bool isAnnotating) {
+    final params = PdfViewerParams(
+      maxScale: 8.0,
+      scrollByMouseWheel: 1.5,
+      scaleEnabled: !isAnnotating,
+      panEnabled: !isAnnotating,
+      onPageChanged: (pageNumber) {
+        final page = (pageNumber ?? 1) - 1;
+        setState(() => _currentPage = page);
+
+        // Debounce the database update
+        _debounceTimer?.cancel();
+        _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            ref.read(libraryProvider.notifier).updateLastPage(
+                  widget.document.filePath,
+                  page,
+                );
+          }
+        });
+      },
+      onViewerReady: (document, controller) {
+        setState(() {
+          _totalPages = document.pages.length;
+          _isReady = true;
+        });
+      },
+      pageOverlaysBuilder: (context, pageRect, page) =>
+          _buildPageOverlays(mode, page),
+    );
+
+    if (kIsWeb && widget.document.bytes != null) {
+      return PdfViewer.data(
+        widget.document.bytes!,
+        controller: _pdfController,
+        initialPageNumber: widget.document.lastPage + 1,
+        params: params,
+        sourceName: widget.document.fileName,
+      );
+    }
+
     return PdfViewer.file(
       widget.document.filePath,
       controller: _pdfController,
       initialPageNumber: widget.document.lastPage + 1,
-      params: PdfViewerParams(
-        maxScale: 8.0,
-        scrollByMouseWheel: 1.5,
-        scaleEnabled: !isAnnotating,
-        panEnabled: !isAnnotating,
-        onPageChanged: (pageNumber) {
-          final page = (pageNumber ?? 1) - 1;
-          setState(() => _currentPage = page);
-
-          // Debounce the database update
-          _debounceTimer?.cancel();
-          _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              ref.read(libraryProvider.notifier).updateLastPage(
-                    widget.document.filePath,
-                    page,
-                  );
-            }
-          });
-        },
-        onViewerReady: (document, controller) {
-          setState(() {
-            _totalPages = document.pages.length;
-            _isReady = true;
-          });
-        },
-        pageOverlaysBuilder: (context, pageRect, page) =>
-            _buildPageOverlays(mode, page),
-      ),
+      params: params,
     );
   }
 

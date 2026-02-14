@@ -97,4 +97,15 @@ class FileRepositoryImpl implements FileRepository {
     }
     return null;
   }
+
+  @override
+  Future<void> clearLastPdfCache() async {
+    if (!kIsWeb) return;
+    if (!Hive.isBoxOpen(_boxName)) {
+      await Hive.openBox(_boxName);
+    }
+    final box = Hive.box(_boxName);
+    await box.delete(_keyBytes);
+    await box.delete(_keyName);
+  }
 }
