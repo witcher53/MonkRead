@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 import 'package:flutter/material.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
 
@@ -332,40 +333,33 @@ class DrawingCanvas extends StatelessWidget {
                           completedStrokes, textAnnotations);
                       
                       if (bounds != null) {
-                        final center = bounds.center; // Normalized center
+                        final center = bounds.center;
                         
-                        // 1. Create the transform matrix (T * R * T^-1)
-                        // We need to map GLOBAL pointer -> LOCAL rotated space.
-                        // So we construct the forward matrix and INVERT it.
-                        
-                        // Convert to pixel space for matrix operations usually, 
-                        // but since we are working with normalized offsets, we can stay normalized 
-                        // IF we treat aspect ratio carefully. 
-                        // However, standard 2D rotation around a point (cx, cy):
-                        // x' = cos(theta) * (x - cx) - sin(theta) * (y - cy) + cx
-                        // y' = sin(theta) * (x - cx) + cos(theta) * (y - cy) + cy
-                        
-                        // To INVERT (map global back to local), we rotate by -theta.
-                        
-                        // Correct aspect ratio handling is crucial if we normalize. 
-                        // Let's do it in PIXEL space for safety, then normalize back.
-                        
+                        // Convert to pixel space
                         final cx = center.dx * size.width;
                         final cy = center.dy * size.height;
                         final px = pos.dx * size.width;
                         final py = pos.dy * size.height;
-                        
-                        final angle = -rotation; // Inverse rotation
-                        final cos = math.cos(angle);
-                        final sin = math.sin(angle);
-                        
-                        final dx = px - cx;
-                        final dy = py - cy;
-                        
-                        final newX = dx * cos - dy * sin + cx;
-                        final newY = dx * sin + dy * cos + cy;
-                        
-                        pos = _normalize(Offset(newX, newY), size);
+
+                        // Construct the Forward Transformation Matrix M
+                        // M = T(cx, cy) * R(rotation) * T(-cx, -cy)
+                        final matrix = Matrix4.identity()
+                          ..translate(cx, cy)
+                          ..rotateZ(rotation)
+                          ..translate(-cx, -cy);
+
+                        // Compute Inverse M^-1
+                        final inverseMatrix = Matrix4.inverted(matrix);
+
+                        // Apply M^-1 to global point P
+                        final pointVector = Vector3(px, py, 0);
+                        final transformedVector = inverseMatrix.transformed3(pointVector);
+
+                        // Normalize back
+                        pos = _normalize(
+                            Offset(transformedVector.x, transformedVector.y), 
+                            size
+                        );
                       }
                     }
                     onPanStart(pos);
@@ -387,18 +381,26 @@ class DrawingCanvas extends StatelessWidget {
                         final cy = center.dy * size.height;
                         final px = pos.dx * size.width;
                         final py = pos.dy * size.height;
-                        
-                        final angle = -rotation; // Inverse rotation
-                        final cos = math.cos(angle);
-                        final sin = math.sin(angle);
-                        
-                        final dx = px - cx;
-                        final dy = py - cy;
-                        
-                        final newX = dx * cos - dy * sin + cx;
-                        final newY = dx * sin + dy * cos + cy;
-                        
-                        pos = _normalize(Offset(newX, newY), size);
+
+                        // Construct the Forward Transformation Matrix M
+                        // M = T(cx, cy) * R(rotation) * T(-cx, -cy)
+                        final matrix = Matrix4.identity()
+                          ..translate(cx, cy)
+                          ..rotateZ(rotation)
+                          ..translate(-cx, -cy);
+
+                        // Compute Inverse M^-1
+                        final inverseMatrix = Matrix4.inverted(matrix);
+
+                        // Apply M^-1 to global point P
+                        final pointVector = Vector3(px, py, 0);
+                        final transformedVector = inverseMatrix.transformed3(pointVector);
+
+                        // Normalize back
+                        pos = _normalize(
+                            Offset(transformedVector.x, transformedVector.y), 
+                            size
+                        );
                       }
                     }
                     onPanUpdate(pos);
