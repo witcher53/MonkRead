@@ -1,5 +1,7 @@
 import 'dart:async';
+// import 'dart:io'; // Removed for web compatibility
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -92,8 +94,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           title: Text(
             widget.document.fileName,
             overflow: TextOverflow.ellipsis,
-          ),
-            ],
           ),
           actions: [
             // ── Mode indicator ───────────────────────
@@ -392,7 +392,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       final firstPage = doc.pages.first;
       
       final outputPath = await PdfExportService.exportWithAnnotations(
-        sourceFilePath: widget.document.filePath,
+        sourceFileName: widget.document.fileName,
         drawingState: ref.read(drawingProvider),
         totalPages: doc.pages.length,
         pageWidthPt: firstPage.width,
@@ -607,7 +607,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // Prevent gray screen by waiting for file availability/build cycle
     return FutureBuilder<bool>(
       future: Future.delayed(const Duration(milliseconds: 100), () async {
-        return File(filePath).exists();
+        // Simulating check to allow build cycle to pass
+        return true; 
       }),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {

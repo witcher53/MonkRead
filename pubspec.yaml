@@ -20,6 +20,9 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   dio: ^5.4.0
   google_sign_in: ^6.2.1
+  pdf: ^3.10.8
+  printing: ^5.13.2
+  universal_io: ^2.2.2
 
 dev_dependencies:
   flutter_test:

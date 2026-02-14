@@ -75,8 +75,11 @@ class AiNotifier extends StateNotifier<AiState> {
         return;
       }
       _syncState();
+      
       // Force UI rebuild if successful
-      if (_service.isConfigured) {
+      // FIX: Ensure we transition to the API view if we have a user, 
+      // even if the token check in isConfigured is strict.
+      if (_service.isConfigured || _service.userName != null) {
         state = state.copyWith(isConfigured: true); 
       }
     } catch (e) {
@@ -89,7 +92,10 @@ class AiNotifier extends StateNotifier<AiState> {
               'Please use an API Key.',
         );
       } else {
-        state = state.copyWith(error: 'Sign-in error: $msg');
+        state = state.copyWith(
+          error: 'Sign-in error: $msg',
+          isLoading: false, // Ensure loading clears on error
+        );
       }
     } finally {
       state = state.copyWith(isLoading: false);

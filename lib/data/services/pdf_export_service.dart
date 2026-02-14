@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -7,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
+import 'package:universal_io/io.dart' as io;
 
 /// Service for flattening user annotations onto a PDF and exporting it.
 ///
@@ -24,22 +26,13 @@ class PdfExportService {
   /// Returns the saved file path on mobile/desktop, or triggers a browser
   /// download on web.
   static Future<String?> exportWithAnnotations({
-    required String sourceFilePath,
+    required String sourceFileName, // Changed from sourceFilePath to sourceFileName for web
     required DocumentDrawingState drawingState,
     required int totalPages,
     required double pageWidthPt,
     required double pageHeightPt,
   }) async {
     try {
-      // Read original PDF bytes
-      final sourceFile = File(sourceFilePath);
-      if (!await sourceFile.exists()) {
-        debugPrint('PdfExportService: source file not found');
-        return null;
-      }
-      // ignore: unused_local_variable
-      final sourceBytes = await sourceFile.readAsBytes();
-
       // Build a new PDF with annotations overlaid
       final doc = pw.Document();
 
@@ -86,17 +79,17 @@ class PdfExportService {
       // Use printing package for cross-platform sharing
       if (kIsWeb) {
         await Printing.sharePdf(
-          bytes: Uint8List.fromList(pdfBytes),
-          filename: _exportFileName(sourceFilePath),
+          bytes:  pdfBytes,
+          filename: _exportFileName(sourceFileName),
         );
         return 'shared';
       }
 
       // Save to documents directory
       final dir = await getApplicationDocumentsDirectory();
-      final exportName = _exportFileName(sourceFilePath);
+      final exportName = _exportFileName(sourceFileName);
       final exportPath = p.join(dir.path, exportName);
-      final exportFile = File(exportPath);
+      final exportFile = io.File(exportPath);
       await exportFile.writeAsBytes(pdfBytes);
 
       debugPrint('PdfExportService: exported to $exportPath');
@@ -170,8 +163,9 @@ class PdfExportService {
     );
   }
 
-  static String _exportFileName(String sourcePath) {
-    final baseName = p.basenameWithoutExtension(sourcePath);
+  static String _exportFileName(String sourceName) {
+    final baseName = p.basenameWithoutExtension(sourceName);
     return '${baseName}_annotated.pdf';
   }
 }
+
