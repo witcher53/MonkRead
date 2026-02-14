@@ -461,6 +461,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (kIsWeb && widget.document.bytes != null) {
       return PdfViewer.data(
         widget.document.bytes!,
+        key: ValueKey(widget.document.fileName), // Force rebuild on new doc
         controller: _pdfController,
         initialPageNumber: widget.document.lastPage + 1,
         params: params,
@@ -470,6 +471,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     return PdfViewer.file(
       widget.document.filePath,
+      key: ValueKey(widget.document.filePath), // Force rebuild
       controller: _pdfController,
       initialPageNumber: widget.document.lastPage + 1,
       params: params,

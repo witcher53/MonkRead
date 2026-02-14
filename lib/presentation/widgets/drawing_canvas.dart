@@ -57,32 +57,32 @@ class DrawingPainter extends CustomPainter {
         final cx = center.dx * size.width;
         final cy = center.dy * size.height;
 
-        // Construct the rotation matrix
-        final matrix = Matrix4.identity()
-          ..translate(cx, cy)
-          ..rotateZ(rotation)
-          ..translate(-cx, -cy);
-        
-        // Draw strokes with path transformation
+        canvas.save();
+        canvas.translate(cx, cy);
+        canvas.rotate(rotation);
+        canvas.translate(-cx, -cy);
+
+        // Draw strokes 
         for (final stroke in selectedStrokes) {
-          _drawTransformedStroke(canvas, stroke, dragOffset, matrix.storage);
+          _drawStroke(canvas, stroke, dragOffset);
         }
         
-        // Draw selection highlight on transformed paths
+        // Draw selection highlight
         for (final stroke in selectedStrokes) {
-           _drawTransformedStrokeHighlight(canvas, stroke, dragOffset, matrix.storage);
+           _drawStrokeHighlight(canvas, stroke, dragOffset);
         }
 
-        // Draw rotated text (text still needs canvas rotation usually, or matrix transform if supported)
+        // Draw rotated text
         for (final text in textAnnotations) {
           if (lasso.selectedTextIds.contains(text.id)) {
-            _drawTextItem(canvas, text, dragOffset, rotationMatrix: matrix);
+            _drawTextItem(canvas, text, dragOffset);
           }
         }
 
-        // Draw selection box (can still use canvas logic or transform points)
-        // Using existing _drawSelectionBox but ensuring it matches visual
-        _drawSelectionBox(canvas, selectionBounds!, includeRotation: true); 
+        // Draw selection box (canvas is already rotated, so don't rotate again inside)
+        _drawSelectionBox(canvas, selectionBounds!, includeRotation: false); 
+        
+        canvas.restore();
       } else {
         for (final stroke in selectedStrokes) {
           _drawStroke(canvas, stroke, dragOffset);
@@ -110,20 +110,6 @@ class DrawingPainter extends CustomPainter {
     }
   }
 
-  void _drawTransformedStroke(Canvas canvas, DrawingPath stroke, Offset offset, Float64List matrix4) {
-    if (stroke.points.length < 2) return;
-
-    final paint = Paint()
-      ..color = stroke.color
-      ..strokeWidth = stroke.strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke
-      ..isAntiAlias = true;
-
-    _drawPath(canvas, stroke.points, offset, paint, transform: matrix4);
-  }
-
   void _drawStroke(Canvas canvas, DrawingPath stroke, Offset offset) {
     if (stroke.points.length < 2) return;
 
@@ -136,20 +122,6 @@ class DrawingPainter extends CustomPainter {
       ..isAntiAlias = true;
 
     _drawPath(canvas, stroke.points, offset, paint);
-  }
-
-  void _drawTransformedStrokeHighlight(Canvas canvas, DrawingPath stroke, Offset offset, Float64List matrix4) {
-    if (stroke.points.length < 2) return;
-
-    final paint = Paint()
-      ..color = Colors.blueAccent.withOpacity(0.3)
-      ..strokeWidth = stroke.strokeWidth + 4.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke
-      ..isAntiAlias = true;
-
-    _drawPath(canvas, stroke.points, offset, paint, transform: matrix4);
   }
 
   void _drawStrokeHighlight(Canvas canvas, DrawingPath stroke, Offset offset) {
@@ -166,7 +138,7 @@ class DrawingPainter extends CustomPainter {
     _drawPath(canvas, stroke.points, offset, paint);
   }
   
-  void _drawTextItem(Canvas canvas, TextAnnotation text, Offset dragOffset, {Matrix4? rotationMatrix}) {
+  void _drawTextItem(Canvas canvas, TextAnnotation text, Offset dragOffset) {
      final pos = text.position + dragOffset;
      final x = pos.dx * canvasSize.width;
      final y = pos.dy * canvasSize.height;
@@ -187,10 +159,6 @@ class DrawingPainter extends CustomPainter {
 
      // Apply text rotation
      canvas.save();
-     // If group rotation is present, apply it first
-     if (rotationMatrix != null) {
-       canvas.transform(rotationMatrix.storage);
-     }
      canvas.translate(x, y);
      canvas.rotate(text.rotation);
      tp.paint(canvas, Offset.zero);
@@ -221,7 +189,7 @@ class DrawingPainter extends CustomPainter {
     _drawDashedPath(canvas, path, paint);
   }
 
-  void _drawPath(Canvas canvas, List<Offset> points, Offset offset, Paint paint, {Float64List? transform}) {
+  void _drawPath(Canvas canvas, List<Offset> points, Offset offset, Paint paint) {
     final path = Path();
     Offset toPixel(Offset n) => Offset(
         (n.dx + offset.dx) * canvasSize.width,
@@ -239,14 +207,7 @@ class DrawingPainter extends CustomPainter {
 
     final last = toPixel(points.last);
     path.lineTo(last.dx, last.dy);
-    
-    // Apply transformation if provided
-    if (transform != null) {
-      final transformedPath = path.transform(transform);
-      canvas.drawPath(transformedPath, paint);
-    } else {
-      canvas.drawPath(path, paint);
-    }
+    canvas.drawPath(path, paint);
   }
 
   void _drawSelectionBox(Canvas canvas, Rect normalizedBounds, {required bool includeRotation}) {

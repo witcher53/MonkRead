@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:universal_io/io.dart' as io;
 
 /// Service for flattening user annotations onto a PDF and exporting it.
@@ -78,11 +79,18 @@ class PdfExportService {
 
       // Use printing package for cross-platform sharing
       if (kIsWeb) {
-        await Printing.sharePdf(
-          bytes:  pdfBytes,
-          filename: _exportFileName(sourceFileName),
-        );
-        return 'shared';
+        // Trigger direct browser download
+        final blob = html.Blob([pdfBytes], 'application/pdf');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..style.display = 'none'
+          ..download = _exportFileName(sourceFileName);
+        html.document.body?.children.add(anchor);
+        anchor.click();
+        html.document.body?.children.remove(anchor);
+        html.Url.revokeObjectUrl(url);
+        return 'downloaded';
       }
 
       // Save to documents directory

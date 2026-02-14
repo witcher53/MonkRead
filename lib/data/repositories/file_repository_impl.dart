@@ -78,24 +78,46 @@ class FileRepositoryImpl implements FileRepository {
 
   /// Retrieves the last opened PDF from Hive (Web only).
   /// This method can be called on app startup.
+  @override
   Future<PdfDocument?> getLastOpenedPdf() async {
     if (!kIsWeb) return null;
+
+    final bytes = await getCachedPdf(_keyBytes);
 
     if (!Hive.isBoxOpen(_boxName)) {
       await Hive.openBox(_boxName);
     }
     final box = Hive.box(_boxName);
-    final bytes = box.get(_keyBytes) as Uint8List?;
     final name = box.get(_keyName) as String?;
 
     if (bytes != null && name != null) {
-       return PdfDocument(
-          filePath: 'memory://$name',
-          fileName: name,
-          bytes: bytes,
-       );
+      return PdfDocument(
+        filePath: 'memory://$name',
+        fileName: name,
+        bytes: bytes,
+      );
     }
     return null;
+  }
+
+  Future<Uint8List?> getCachedPdf(String fileId) async {
+    final box = await Hive.openBox(_boxName);
+    final dynamic rawData = box.get(fileId);
+
+    if (rawData == null) return null;
+
+    try {
+      if (rawData is Uint8List) {
+        return rawData;
+      } else if (rawData is List) {
+        return Uint8List.fromList(List<int>.from(rawData));
+      } else {
+        throw Exception("Unexpected data type in cache: ${rawData.runtimeType}");
+      }
+    } catch (e) {
+      await box.delete(fileId);
+      return null;
+    }
   }
 
   @override
