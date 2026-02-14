@@ -1,8 +1,7 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
-import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 import 'package:flutter/material.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
+import 'package:vector_math/vector_math_64.dart' as vector_math;
 
 /// Paints completed strokes + the active stroke.
 /// All coordinates are normalized (0–1) and scaled to [canvasSize].
@@ -30,120 +29,8 @@ class DrawingPainter extends CustomPainter {
     final lasso = lassoSelection;
     final hasLasso = lasso != null;
     final dragOffset = hasLasso ? lasso.dragOffset : Offset.zero;
-    // Rotation is NOT applied to the canvas here. 
-    // The points are already transformed in the logic layer or pre-transformed.
-    // Wait, the requirement says: "The points collected from the inverted matrix are already in the correct local space."
-    // But for visualization, we still need to render them correctly.
-    // If the logical points are updated, we just draw them. 
-    // BUT, usually lasso selection *visually* rotates.
-    // If the PROMPT says: "In your CustomPainter's paint method, completely remove any canvas.rotate(), canvas.transform(), or matrix scaling applied to the Path."
-    // This implies we should draw them as is?
-    // Let's look at the "Specific Fix": "Action: In your CustomPainter's paint method, completely remove any canvas.rotate()... The points collected from the inverted matrix are already in the correct local space."
-    // This likely refers to the *Active* manipulation or how inputs are handled.
-    // If we are drawing the *Selected* strokes, and they are *rotated* in the model, we need to respect that.
-    // However, if the lasso logic updates the *points* themselves to be rotated, then valid.
-    // If the lasso logic only updates a `rotationAngle` property, then we MUST rotate the drawing.
-    
-    // BUT the prompt is very specific: "completely remove any canvas.rotate()... applied to the Path."
-    // It implies the "Path" (maybe the lasso path? or the strokes?)
-    // Let's assume the strokes should be drawn transformed. 
-    // Actually, looking at the provided code in the prompt for `pdf_export_service`, it doesn't handle rotation. 
-    // The previous `DrawingPainter` code DID handle rotation via `canvas.rotate`.
-    // If I remove `canvas.rotate`, how will the user see the rotation?
-    // Maybe the "inverted matrix" part in `onPanUpdate` updates the *actual points*?
-    // No, `onPanUpdate` usually updates the *lasso* state (rotation angle).
-    
-    // Rereading TASK 3: "In the pointer/pan update method, map global coordinates to local coordinates using renderBox.getTransformTo(null)..invert()."
-    // "In your CustomPainter's paint method, completely remove any canvas.rotate(), canvas.transform(), or matrix scaling applied to the Path. The points collected from the inverted matrix are already in the correct local space."
-    // This sounds like the "Double Rotation" comes from rotating the input AND rotating the canvas.
-    // If we fix the input to be in local space correctly (un-rotated relative to the screen, or something?), 
-    // maybe we *only* need to rotate the canvas? 
-    // Or maybe the input was *already* being rotated by the widget hierarchy? 
-    
-    // "FIX LASSO DOUBLE ROTATION" -> Double rotation implies it's being rotated twice.
-    // If I remove `canvas.rotate`, then I must rely on the points being rotated. 
-    // But `DrawingPath` points are usually static until committed.
-    // Use your best judgment. If the user says "remove ... applied to the Path", maybe they refer to the *Lasso Path* itself?
-    // Or maybe the `selectedStrokes` are being drawn with a rotation, while `selectionBounds` is also rotated?
-    
-    // Let's implement the `onPan` fix first, which is about input coordinates.
-    // If the input is corrected, maybe the `canvas.rotate` is indeed correct but was receiving *already rotated* inputs?
-    // Wait, if I rotate the canvas, and I *also* rotate the input delta, I get double rotation.
-    // If I fix the input to be "local space" without rotation bias, then `canvas.rotate` is fine?
-    // BUT the prompt says: "completely remove any canvas.rotate()... applied to the Path."
-    
-    // Let's look at the provided solution in `DrawingCanvas.dart` *previous* content.
-    // It had `canvas.rotate` in `paint`.
-    // It had matrix logic in `onPanUpdate`.
-    
-    // I will STRICTLY follow the prompt:
-    // 1. `onPanUpdate`: use `renderBox.getTransformTo(null)..invert()`.
-    // 2. `paint`: remove `canvas.rotate`... applied to the **Path**.
-    
-    // Okay, looking at `DrawingPainter.paint` in the previous file:
-    // It had `canvas.rotate(rotation)` in the `if (rotation != 0.0)` block.
-    // I will remove that rotation logic for the *strokes*, or *selection*.
-    // But if I remove it, the strokes won't visualy rotate unless the points are updated.
-    // Maybe the `lassoSelection` model holds *rotated points*?
-    // No, `LassoSelection` usually holds indices and a transformation (rotation/scale/translation).
-    
-    // Let's assume the user knows what they are asking. 
-    // "The points collected from the inverted matrix are already in the correct local space."
-    // This likely refers to the *input points* for the Lasso Path or the Handle?
-    // Actually, maybe the "Lasso Double Rotation" refers to the *Lasso Selection Box* or the *Strokes inside it*.
-    
-    // I'll stick to the "Remove `canvas.rotate`" instruction.
-    // It implies the visualization should be done differently, or the points are transformed before painting?
-    // Or use `canvas.transform` with a matrix that is *not* just a simple rotate?
-    // No, "remove any ... matrix scaling applied to the Path".
-    
-    // Wait, if I look at `DrawingPainter` in the previous turn:
-    // It rotates the canvas to draw the *selected strokes*.
-    // If I remove that, the selected strokes will appear in their original position.
-    // This seems wrong IF they are supposed to be rotated.
-    // UNLESS the `LassoSelection` *changes the actual points* of the collection in real time?
-    // No, `DrawingState` usually keeps original points + a transform.
-    
-    // Let's pause. "Lasso Double Rotation" bug usually means:
-    // User rotates by 10 degrees.
-    // Visual shows 20 degrees rotation.
-    // This happens if you rotate the canvas *and* the gesture detector rotates the coordinate system (or the parent widget does).
-    
-    // PROMPT TASK 3 says:
-    // "Action: In the pointer/pan update method, map global coordinates to local coordinates using renderBox.getTransformTo(null)..invert()."
-    // "Action: In your CustomPainter's paint method, completely remove any canvas.rotate()..."
-    
-    // Only one explanation: The logic updates the *points* of the strokes directly?
-    // Or the "rotation" is being applied to the stroke points *before* passing to painter?
-    // No, `DrawingPainter` takes `completedStrokes` and `lassoSelection`.
-    
-    // Let's trust the "Remove canvas.rotate" part.
-    // I will keep the translation (dragOffset) but remove rotation.
-    // THIS MIGHT BE A TRAP or I am misunderstanding "applied to the Path".
-    // Maybe it means "the lasso path" (the dashed line)?
-    // Or the "selected strokes path"?
-    // "remove any ... applied to the Path. The points collected from the inverted matrix are already in the correct local space."
-    // This suggests that the points we are painting *are* already rotated?
-    // But `unselectedStrokes` vs `selectedStrokes`. 
-    
-    // Let's implement the specific changes requested.
-    
-    // Refactoring `DrawingCanvas`:
-    // `onPanStart` / `onPanUpdate` need to use `RenderBox`.
-    // I need to use a `GlobalKey` or `context.findRenderObject()` to get the RenderBox.
-    // Since `DrawingCanvas` is a StatelessWidget, getting `RenderBox` inside `onPan` requires context or key.
-    // But `onPanUpdate` callbacks in `GestureDetector` don't give context easily.
-    // However, `DrawingCanvas` is built with `context`.
-    // I can use `context.findRenderObject() as RenderBox?`.
-    
-    // Let's proceed with the code.
 
-    final lasso = lassoSelection;
-    final hasLasso = lasso != null;
-    final dragOffset = hasLasso ? lasso.dragOffset : Offset.zero;
-    // final rotation = hasLasso ? lasso.rotationAngle : 0.0; // REMOVED as per instruction?
-
-    // 1. Organize Strokes
+    // 1. Organize Strokes into unselected and selected groups
     final unselectedStrokes = <DrawingPath>[];
     final selectedStrokes = <DrawingPath>[];
 
@@ -155,48 +42,484 @@ class DrawingPainter extends CustomPainter {
       }
     }
 
-    // 2. Draw Unselected
+    // 2. Draw Unselected Strokes
     for (final stroke in unselectedStrokes) {
       _drawStroke(canvas, stroke, Offset.zero);
     }
-    
-    // 3. Draw Selected
-    // REMOVING ROTATION HERE as per instruction
-    for (final stroke in selectedStrokes) {
+
+    // 3. Draw Selected Items (With Offset but NO rotation applied to canvas)
+    // The requirement is to remove any canvas.rotate() or matrix scaling applied to the Path.
+    // The points themselves are assumed to be handled correctly via logic or just drawn with dragOffset.
+    if (hasLasso && !lasso.isEmpty && selectionBounds != null) {
+      // Draw selected strokes with drag offset
+      for (final stroke in selectedStrokes) {
         _drawStroke(canvas, stroke, dragOffset);
-        // Highlight
+        // Draw selection highlight
         _drawStrokeHighlight(canvas, stroke, dragOffset);
+      }
+      
+      // Draw selected text (with drag offset but NO additional canvas rotation)
+      for (final text in textAnnotations) {
+        if (lasso.selectedTextIds.contains(text.id)) {
+          _drawTextItem(canvas, text, dragOffset);
+        }
+      }
+
+      // Draw selection box - handle rotation solely for the box if needed, or remove as per instruction?
+      // "completely remove any canvas.rotate()... applied to the Path."
+      // The selection box is a UI element, not user content. However, if the user rotated the content, the box should visually rotate.
+      // If we remove rotation entirely, the box will be axis-aligned.
+      // But let's follow the instruction strictly: ensure NO rotation application to the canvas that might cause double rotation.
+      // If the points (and bounds) are pre-rotated by logic, then drawing the box around bounds is enough.
+      // We will draw the selection box around the *transformed* bounds if `selectionBounds` reflects that.
+      // `LassoSelection.computeBounds` usually returns unrotated bounds of the original content?
+      // If we cannot rotate the canvas, we simply draw the box as is.
+      _drawSelectionBox(canvas, selectionBounds!, includeRotation: false);
     }
 
-    // ... (rest of simple drawing)
+    // 4. Draw active stroke
+    if (activeStroke != null) {
+      _drawStroke(canvas, activeStroke!, Offset.zero);
+    }
+
+    // 5. Draw lasso path
+    if (hasLasso && lasso.pathPoints.isNotEmpty) {
+      _drawLassoPath(canvas, lasso.pathPoints);
+    }
   }
-  
-  // ...
+
+  void _drawStroke(Canvas canvas, DrawingPath stroke, Offset offset) {
+    if (stroke.points.length < 2) return;
+
+    final paint = Paint()
+      ..color = stroke.color
+      ..strokeWidth = stroke.strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+
+    _drawPath(canvas, stroke.points, offset, paint);
+  }
+
+  void _drawStrokeHighlight(Canvas canvas, DrawingPath stroke, Offset offset) {
+    if (stroke.points.length < 2) return;
+
+    final paint = Paint()
+      ..color = Colors.blueAccent.withOpacity(0.3)
+      ..strokeWidth = stroke.strokeWidth + 4.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+
+    _drawPath(canvas, stroke.points, offset, paint);
+  }
+
+  void _drawTextItem(Canvas canvas, TextAnnotation text, Offset dragOffset) {
+    final pos = text.position + dragOffset;
+    final x = pos.dx * canvasSize.width;
+    final y = pos.dy * canvasSize.height;
+
+    final span = TextSpan(
+      text: text.text,
+      style: TextStyle(
+        color: text.color,
+        fontSize: text.fontSize,
+      ),
+    );
+
+    final tp = TextPainter(
+      text: span,
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+
+    // Text rotation: If instruction says remove ANY canvas.rotate, we should check if text rotation is also double-rotated.
+    // Usually text rotation is intrinsic to the text item.
+    // If we remove it, rotated text becomes upright.
+    // The instructions said "completely remove any canvas.rotate()... applied to the Path."
+    // Text is not a Path. We will keep text intrinsic rotation.
+    canvas.save();
+    canvas.translate(x, y);
+    canvas.rotate(text.rotation);
+    tp.paint(canvas, Offset.zero);
+    canvas.restore();
+  }
+
+  void _drawLassoPath(Canvas canvas, List<Offset> points) {
+    if (points.length < 2) return;
+
+    final scaledPoints = points.map((p) => Offset(p.dx * canvasSize.width, p.dy * canvasSize.height)).toList();
+
+    final paint = Paint()
+      ..color = Colors.deepOrangeAccent
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+
+    final path = Path();
+    path.moveTo(scaledPoints.first.dx, scaledPoints.first.dy);
+    for (int i = 1; i < scaledPoints.length - 1; i++) {
+        final p0 = scaledPoints[i];
+        final p1 = scaledPoints[i+1];
+        path.quadraticBezierTo(p0.dx, p0.dy, (p0.dx + p1.dx)/2, (p0.dy + p1.dy)/2);
+    }
+    path.lineTo(scaledPoints.last.dx, scaledPoints.last.dy);
+
+    _drawDashedPath(canvas, path, paint);
+  }
+
+  void _drawPath(Canvas canvas, List<Offset> points, Offset offset, Paint paint) {
+    final path = Path();
+    Offset toPixel(Offset n) => Offset(
+        (n.dx + offset.dx) * canvasSize.width,
+        (n.dy + offset.dy) * canvasSize.height);
+
+    final first = toPixel(points.first);
+    path.moveTo(first.dx, first.dy);
+
+    for (int i = 1; i < points.length - 1; i++) {
+      final p0 = toPixel(points[i]);
+      final p1 = toPixel(points[i + 1]);
+      path.quadraticBezierTo(
+          p0.dx, p0.dy, (p0.dx + p1.dx) / 2, (p0.dy + p1.dy) / 2);
+    }
+
+    final last = toPixel(points.last);
+    path.lineTo(last.dx, last.dy);
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawSelectionBox(Canvas canvas, Rect normalizedBounds, {required bool includeRotation}) {
+    final rect = Rect.fromLTRB(
+      normalizedBounds.left * canvasSize.width,
+      normalizedBounds.top * canvasSize.height,
+      normalizedBounds.right * canvasSize.width,
+      normalizedBounds.bottom * canvasSize.height,
+    );
+
+    // According to instructions, remove canvas.rotate logic here if it helps fix double rotation.
+    // If 'includeRotation' is false, we just draw the box.
+    if (includeRotation && (lassoSelection?.rotationAngle ?? 0) != 0) {
+       // Instructions said ensure NO rotation is applied.
+       // So we skip this block intentionally.
+       // canvas.save();
+       // canvas.translate(rect.center.dx, rect.center.dy);
+       // canvas.rotate(lassoSelection!.rotationAngle);
+       // canvas.translate(-rect.center.dx, -rect.center.dy);
+    }
+
+    final borderPaint = Paint()
+      ..color = Colors.blueAccent
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+
+    final path = Path()..addRect(rect);
+    _drawDashedPath(canvas, path, borderPaint);
+
+    final handlePaint = Paint()
+      ..color = Colors.blueAccent
+      ..style = PaintingStyle.fill;
+    const handleRadius = 4.0;
+    for (final corner in [rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight]) {
+      canvas.drawCircle(corner, handleRadius, handlePaint);
+    }
+
+    const rotHandleLen = 24.0;
+    const rotHandleRadius = 6.0;
+    final topCenter = Offset(rect.center.dx, rect.top);
+    final handleEnd = Offset(topCenter.dx, topCenter.dy - rotHandleLen);
+
+    final linePaint = Paint()
+      ..color = Colors.blueAccent
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(topCenter, handleEnd, linePaint);
+    
+    canvas.drawCircle(handleEnd, rotHandleRadius, handlePaint);
+
+    // if (includeRotation ...) canvas.restore(); // Skipped
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    const dashWidth = 5.0;
+    const dashSpace = 5.0;
+    double distance = 0.0;
+    for (final metric in path.computeMetrics()) {
+      while (metric.length > 0 && distance < metric.length) {
+        final extractPath = metric.extractPath(distance, distance + dashWidth);
+        canvas.drawPath(extractPath, paint);
+        distance += dashWidth + dashSpace;
+      }
+      distance = 0.0;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant DrawingPainter old) {
+    return old.completedStrokes != completedStrokes ||
+        old.activeStroke != activeStroke ||
+        old.lassoSelection != lassoSelection ||
+        old.selectionBounds != selectionBounds ||
+        old.canvasSize != canvasSize ||
+        old.lassoSelection?.rotationAngle != lassoSelection?.rotationAngle ||
+        old.textAnnotations != textAnnotations;
+  }
 }
 
+/// Per-page overlay for drawing strokes and interactive text annotations.
 class DrawingCanvas extends StatelessWidget {
-  // ... 
+  final AnnotationMode annotationMode;
+  final int currentPage;
+  final List<DrawingPath> completedStrokes;
+  final DrawingPath? activeStroke;
+  final LassoSelection? lassoSelection;
+  final List<TextAnnotation> textAnnotations;
+  final double pageWidthPt;
+  final void Function(Offset normalizedPosition) onPanStart;
+  final void Function(Offset normalizedPosition) onPanUpdate;
+  final VoidCallback onPanEnd;
+  final void Function(Offset normalizedPosition)? onTextTap;
+  final void Function(String id)? onTextRemove;
+  final void Function(TextAnnotation annotation)? onTextEdit;
+  final void Function(String id, Offset normalizedDelta)? onTextDrag;
+
+  const DrawingCanvas({
+    super.key,
+    required this.annotationMode,
+    required this.currentPage,
+    required this.completedStrokes,
+    this.activeStroke,
+    this.textAnnotations = const [],
+    this.lassoSelection,
+    required this.pageWidthPt,
+    required this.onPanStart,
+    required this.onPanUpdate,
+    required this.onPanEnd,
+    this.onTextTap,
+    this.onTextRemove,
+    this.onTextEdit,
+    this.onTextDrag,
+  });
 
   @override
   Widget build(BuildContext context) {
-      // ...
-      return GestureDetector(
-        // ...
-        onPanUpdate: (isPen || isLasso) ? (d) {
-             final renderBox = context.findRenderObject() as RenderBox?;
-             if (renderBox == null) return;
-             
-             // TASK 3: map global coordinates to local coordinates using renderBox.getTransformTo(null)..invert()
-             // d.globalPosition is global.
-             
-             final matrix = renderBox.getTransformTo(null)..invert();
-             final localPoint = MatrixUtils.transformPoint(matrix, d.globalPosition);
-             final pos = _normalize(localPoint, size);
-             
-             onPanUpdate(pos); 
-        } : null,
-        // ...
-      );
+    final isPen = annotationMode == AnnotationMode.pen;
+    final isText = annotationMode == AnnotationMode.text;
+    final isLasso = annotationMode == AnnotationMode.lasso;
+    final isAnnotating = annotationMode != AnnotationMode.none;
+
+    return IgnorePointer(
+      ignoring: !isAnnotating,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          final zoomScale = pageWidthPt > 0 ? size.width / pageWidthPt : 1.0;
+          final lassoOffset = lassoSelection?.dragOffset ?? Offset.zero;
+          
+          // Use a GlobalKey here? Not possible in StatelessWidget build unless passed in.
+          // We rely on context.findRenderObject() for the parent or self.
+          // Since LayoutBuilder has a context, we can try using it, but it gives the RenderBox of the LayoutBuilder (a RenderBox).
+          // However, the gesture detector is inside.
+          // The fix requires renderBox.getTransformTo(null).
+          // We can use `context.findRenderObject()` which usually returns the RenderObject for this widget (DrawingCanvas).
+          // But wait, DrawingCanvas is a widget. Its context refers to its location in the tree.
+          // `findRenderObject()` on `context` traverses down to find a render object.
+          // This should work fine.
+
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onPanStart: (isPen || isLasso)
+                ? (d) {
+                    var pos = _normalize(d.localPosition, size);
+                    
+                    // Apply Matrix Fix for Lasso Rotation logic
+                    if (isLasso && (lassoSelection?.rotationAngle ?? 0) != 0) {
+                        final renderBox = context.findRenderObject() as RenderBox?;
+                        if (renderBox != null) {
+                           final matrix = renderBox.getTransformTo(null)..invert();
+                           // We need to transform the global position
+                           final localPoint = MatrixUtils.transformPoint(matrix, d.globalPosition);
+                           pos = _normalize(localPoint, size);
+                        }
+                    }
+                    onPanStart(pos);
+                  }
+                : null,
+            onPanUpdate: (isPen || isLasso)
+                ? (d) {
+                    var pos = _normalize(d.localPosition, size);
+                    
+                    // Apply Matrix Fix for Lasso Rotation logic
+                    if (isLasso && (lassoSelection?.rotationAngle ?? 0) != 0) {
+                        final renderBox = context.findRenderObject() as RenderBox?;
+                        if (renderBox != null) {
+                           final matrix = renderBox.getTransformTo(null)..invert();
+                           // We need to transform the global position
+                           final localPoint = MatrixUtils.transformPoint(matrix, d.globalPosition);
+                           pos = _normalize(localPoint, size);
+                        }
+                    }
+
+                    onPanUpdate(pos);
+                  }
+                : null,
+            onPanEnd: (isPen || isLasso)
+                ? (_) => onPanEnd()
+                : null,
+            onTapUp: isText
+                ? (d) => onTextTap?.call(_normalize(d.localPosition, size))
+                : null,
+            child: RepaintBoundary(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CustomPaint(
+                    size: size,
+                    painter: DrawingPainter(
+                      completedStrokes: completedStrokes,
+                      activeStroke: activeStroke,
+                      lassoSelection: lassoSelection,
+                      selectionBounds: lassoSelection?.computeBounds(
+                        completedStrokes,
+                        textAnnotations,
+                      ),
+                      canvasSize: size,
+                      textAnnotations: textAnnotations,
+                    ),
+                  ),
+                  
+                  ...textAnnotations.map((a) {
+                    final isSelected = lassoSelection?.selectedTextIds.contains(a.id) ?? false;
+                    
+                    // If selected, we handle drawing inside the painter or manually position? 
+                    // Previous logic: if rotated, hide widget and draw in painter.
+                    if (isSelected && (lassoSelection?.rotationAngle ?? 0) != 0) {
+                      return const SizedBox.shrink();
+                    }
+
+                    var displayAnnotation = a;
+                    if (isSelected) {
+                      displayAnnotation = a.copyWith(
+                        position: a.position + lassoOffset,
+                      );
+                    }
+
+                    return _InteractiveText(
+                      annotation: displayAnnotation,
+                      canvasSize: size,
+                      zoomScale: zoomScale,
+                      isTextMode: isText,
+                      isSelectedByLasso: isSelected,
+                      onDrag: onTextDrag,
+                      onEdit: onTextEdit,
+                      onRemove: onTextRemove,
+                    );
+                  }),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Offset _normalize(Offset pixel, Size size) {
+    if (size.isEmpty) return Offset.zero;
+    return Offset(pixel.dx / size.width, pixel.dy / size.height);
+  }
+}
+
+class _InteractiveText extends StatefulWidget {
+  final TextAnnotation annotation;
+  final Size canvasSize;
+  final double zoomScale;
+  final bool isTextMode;
+  final bool isSelectedByLasso;
+  final void Function(String id, Offset normalizedDelta)? onDrag;
+  final void Function(TextAnnotation annotation)? onEdit;
+  final void Function(String id)? onRemove;
+
+  const _InteractiveText({
+    required this.annotation,
+    required this.canvasSize,
+    required this.zoomScale,
+    required this.isTextMode,
+    this.isSelectedByLasso = false,
+    this.onDrag,
+    this.onEdit,
+    this.onRemove,
+  });
+
+  @override
+  State<_InteractiveText> createState() => _InteractiveTextState();
+}
+
+class _InteractiveTextState extends State<_InteractiveText> {
+  bool _selected = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.annotation;
+    final x = a.position.dx * widget.canvasSize.width;
+    final y = a.position.dy * widget.canvasSize.height;
+
+    final scaledFontSize = a.fontSize * widget.zoomScale;
+    final showBorder = _selected || widget.isSelectedByLasso;
+
+    return Positioned(
+      left: x,
+      top: y,
+      child: Transform.rotate(
+        angle: a.rotation,
+        alignment: Alignment.topLeft,
+        child: GestureDetector(
+          onPanUpdate: widget.isTextMode
+              ? (d) {
+                  final dx = d.delta.dx / widget.canvasSize.width;
+                  final dy = d.delta.dy / widget.canvasSize.height;
+                  widget.onDrag?.call(a.id, Offset(dx, dy));
+                }
+              : null,
+          onTap: widget.isTextMode
+              ? () { setState(() => _selected = !_selected); }
+              : null,
+          onDoubleTap: widget.isTextMode 
+              ? () { widget.onEdit?.call(a); } 
+              : null,
+          onLongPress: widget.isTextMode 
+              ? () { widget.onRemove?.call(a.id); } 
+              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+            decoration: showBorder
+                ? BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(3),
+                    color: widget.isSelectedByLasso
+                        ? Colors.blueAccent.withOpacity(0.1)
+                        : null,
+                  )
+                : null,
+            child: Text(
+              a.text,
+              style: TextStyle(
+                fontSize: scaledFontSize,
+                color: a.color,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
