@@ -430,7 +430,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   Widget _buildPrimaryPdf(AnnotationMode mode, bool isAnnotating) {
     final params = PdfViewerParams(
-      rotation: _rotation * 90, // Sync rotation with state
       maxScale: 8.0,
       scrollByMouseWheel: 1.5,
       scaleEnabled: !isAnnotating,
@@ -461,22 +460,28 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
 
     if (kIsWeb && widget.document.bytes != null) {
-      return PdfViewer.data(
-        widget.document.bytes!,
-        key: ValueKey('${widget.document.fileName}_${widget.document.bytes?.length}'), // Force rebuild on new doc
-        controller: _pdfController,
-        initialPageNumber: widget.document.lastPage + 1,
-        params: params,
-        sourceName: widget.document.fileName,
+      return RotatedBox(
+        quarterTurns: _rotation,
+        child: PdfViewer.data(
+          widget.document.bytes!,
+          key: ValueKey('${widget.document.fileName}_${widget.document.bytes?.length}'), // Force rebuild on new doc
+          controller: _pdfController,
+          initialPageNumber: widget.document.lastPage + 1,
+          params: params,
+          sourceName: widget.document.fileName,
+        ),
       );
     }
 
-    return PdfViewer.file(
-      widget.document.filePath,
-      key: ValueKey(widget.document.filePath), // Force rebuild
-      controller: _pdfController,
-      initialPageNumber: widget.document.lastPage + 1,
-      params: params,
+    return RotatedBox(
+      quarterTurns: _rotation,
+      child: PdfViewer.file(
+        widget.document.filePath,
+        key: ValueKey(widget.document.filePath), // Force rebuild
+        controller: _pdfController,
+        initialPageNumber: widget.document.lastPage + 1,
+        params: params,
+      ),
     );
   }
 
