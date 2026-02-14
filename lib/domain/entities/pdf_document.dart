@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Represents a PDF document entity in the domain layer.
 ///
 /// This is a pure data class with no dependency on frameworks or packages.
@@ -14,11 +16,15 @@ class PdfDocument {
   /// The page the user was last reading (0-indexed). Used for resume.
   final int lastPage;
 
+  /// Raw bytes of the PDF file (Required for Web persistence).
+  final Uint8List? bytes;
+
   const PdfDocument({
     required this.filePath,
     required this.fileName,
     this.pageCount,
     this.lastPage = 0,
+    this.bytes,
   });
 
   /// Returns a copy with the given fields replaced.
@@ -27,12 +33,14 @@ class PdfDocument {
     String? fileName,
     int? pageCount,
     int? lastPage,
+    Uint8List? bytes,
   }) {
     return PdfDocument(
       filePath: filePath ?? this.filePath,
       fileName: fileName ?? this.fileName,
       pageCount: pageCount ?? this.pageCount,
       lastPage: lastPage ?? this.lastPage,
+      bytes: bytes ?? this.bytes,
     );
   }
 

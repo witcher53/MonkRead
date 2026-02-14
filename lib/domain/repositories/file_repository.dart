@@ -15,4 +15,8 @@ abstract class FileRepository {
   /// Returns a [PdfDocument] if a file was selected, or `null` if the user
   /// cancelled the picker.
   Future<PdfDocument?> pickPdfFile();
+
+  /// Retrieves the last opened PDF document (Web persistence).
+  /// Returns `null` on native platforms or if no file is cached.
+  Future<PdfDocument?> getLastOpenedPdf();
 }

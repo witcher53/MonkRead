@@ -71,6 +71,19 @@ class PdfPickNotifier extends StateNotifier<PdfPickState> {
     }
   }
 
+  /// Checks if there is a persisted PDF (Web) and loads it.
+  Future<void> checkLastOpenedPdf() async {
+    try {
+      final doc = await _repository.getLastOpenedPdf();
+      if (doc != null) {
+        // Found a persisted document -> triggers navigation in HomeScreen
+        state = PdfPickSuccess(doc);
+      }
+    } catch (_) {
+      // Silent failure for auto-load
+    }
+  }
+
   /// Resets the state back to initial (e.g. after navigating to reader).
   void reset() {
     state = const PdfPickInitial();

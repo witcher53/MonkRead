@@ -14,11 +14,25 @@ import 'package:monkread/presentation/widgets/error_dialog.dart';
 ///
 /// Shows a bookshelf grid of recently opened PDFs, or an empty-state prompt
 /// when the library is empty. A FAB opens a new PDF via the file picker.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto-load last PDF on Web to prevent data loss on refresh
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(pdfPickProvider.notifier).checkLastOpenedPdf();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Listen to pdf pick state changes for navigation / errors
     ref.listen<PdfPickState>(pdfPickProvider, (previous, next) {
       if (next is PdfPickSuccess) {

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 import 'package:flutter/material.dart';
 import 'package:monkread/domain/entities/drawing_state.dart';
