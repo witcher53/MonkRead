@@ -332,21 +332,40 @@ class DrawingCanvas extends StatelessWidget {
                           completedStrokes, textAnnotations);
                       
                       if (bounds != null) {
-                        final center = _normalize(
-                            Offset(bounds.center.dx * size.width,
-                                bounds.center.dy * size.height),
-                            size);
+                        final center = bounds.center; // Normalized center
                         
-                        final dx = pos.dx - center.dx;
-                        final dy = pos.dy - center.dy;
+                        // 1. Create the transform matrix (T * R * T^-1)
+                        // We need to map GLOBAL pointer -> LOCAL rotated space.
+                        // So we construct the forward matrix and INVERT it.
                         
-                        final sin = math.sin(-rotation);
-                        final cos = math.cos(-rotation);
+                        // Convert to pixel space for matrix operations usually, 
+                        // but since we are working with normalized offsets, we can stay normalized 
+                        // IF we treat aspect ratio carefully. 
+                        // However, standard 2D rotation around a point (cx, cy):
+                        // x' = cos(theta) * (x - cx) - sin(theta) * (y - cy) + cx
+                        // y' = sin(theta) * (x - cx) + cos(theta) * (y - cy) + cy
                         
-                        final newX = dx * cos - dy * sin;
-                        final newY = dx * sin + dy * cos;
+                        // To INVERT (map global back to local), we rotate by -theta.
                         
-                        pos = Offset(center.dx + newX, center.dy + newY);
+                        // Correct aspect ratio handling is crucial if we normalize. 
+                        // Let's do it in PIXEL space for safety, then normalize back.
+                        
+                        final cx = center.dx * size.width;
+                        final cy = center.dy * size.height;
+                        final px = pos.dx * size.width;
+                        final py = pos.dy * size.height;
+                        
+                        final angle = -rotation; // Inverse rotation
+                        final cos = math.cos(angle);
+                        final sin = math.sin(angle);
+                        
+                        final dx = px - cx;
+                        final dy = py - cy;
+                        
+                        final newX = dx * cos - dy * sin + cx;
+                        final newY = dx * sin + dy * cos + cy;
+                        
+                        pos = _normalize(Offset(newX, newY), size);
                       }
                     }
                     onPanStart(pos);
@@ -362,21 +381,24 @@ class DrawingCanvas extends StatelessWidget {
                           completedStrokes, textAnnotations);
                       
                       if (bounds != null) {
-                        final center = _normalize(
-                            Offset(bounds.center.dx * size.width,
-                                bounds.center.dy * size.height),
-                            size);
+                        final center = bounds.center;
                         
-                        final dx = pos.dx - center.dx;
-                        final dy = pos.dy - center.dy;
+                        final cx = center.dx * size.width;
+                        final cy = center.dy * size.height;
+                        final px = pos.dx * size.width;
+                        final py = pos.dy * size.height;
                         
-                        final sin = math.sin(-rotation);
-                        final cos = math.cos(-rotation);
+                        final angle = -rotation; // Inverse rotation
+                        final cos = math.cos(angle);
+                        final sin = math.sin(angle);
                         
-                        final newX = dx * cos - dy * sin;
-                        final newY = dx * sin + dy * cos;
+                        final dx = px - cx;
+                        final dy = py - cy;
                         
-                        pos = Offset(center.dx + newX, center.dy + newY);
+                        final newX = dx * cos - dy * sin + cx;
+                        final newY = dx * sin + dy * cos + cy;
+                        
+                        pos = _normalize(Offset(newX, newY), size);
                       }
                     }
                     onPanUpdate(pos);

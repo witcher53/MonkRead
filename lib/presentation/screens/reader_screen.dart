@@ -171,7 +171,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ],
         ),
         // Mobile Drawer
-        drawer: (MediaQuery.of(context).size.width < 900 && _isReady && _pdfController.document != null)
+        drawer: MediaQuery.of(context).size.width < 900
             ? NavigationSidebar(
                 controller: _pdfController,
                 document: _pdfController.document!,
@@ -181,13 +181,27 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             : null,
         body: Row(
           children: [
-            // Desktop Sidebar
-            if (_showSidenav && MediaQuery.of(context).size.width >= 900 && _isReady && _pdfController.document != null)
-              NavigationSidebar(
-                controller: _pdfController,
-                document: _pdfController.document!,
-                filePath: widget.document.filePath,
-                onClose: () => setState(() => _showSidenav = false),
+            // Desktop Sidebar (Animated)
+            if (MediaQuery.of(context).size.width >= 900)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                width: _showSidenav ? 320 : 0,
+                child: ClipRect(
+                  child: OverflowBox(
+                    minWidth: 320,
+                    maxWidth: 320,
+                    alignment: Alignment.topLeft,
+                    child: _isReady && _pdfController.document != null
+                        ? NavigationSidebar(
+                            controller: _pdfController,
+                            document: _pdfController.document!,
+                            filePath: widget.document.filePath,
+                            onClose: () => setState(() => _showSidenav = false),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
               ),
 
             // Main Content Area

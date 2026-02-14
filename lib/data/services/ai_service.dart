@@ -32,6 +32,7 @@ class AiService {
   /// Google Sign-In instance — scoped to Generative Language API.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['https://www.googleapis.com/auth/generative-language'],
+    clientId: kIsWeb ? const String.fromEnvironment('GOOGLE_CLIENT_ID') : null,
   );
 
   String? _accessToken;
